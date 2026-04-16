@@ -83,7 +83,7 @@ For `testCommand` and `buildCommand` on the target project, bake in any activati
 
 ## Step 2: Determine Tier
 
-Based on what you've collected, determine the migration tier using `architecture.md` as the source of truth.
+Based on what you've collected, determine the migration tier using `ARCHITECTURE.md` as the source of truth.
 
 ### Tier 1: medium complexity
 Use when:
