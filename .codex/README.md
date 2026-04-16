@@ -15,6 +15,7 @@ Do not rely on `/migrate` being available as a slash command in Codex CLI. The c
 Canonical migration entry points:
 - skill: `.codex/skills/migrate/SKILL.md`
 - workflow contract: `.codex/commands/migrate.md`
+- terminal wizard: `.codex/scripts/migrate_wizard.py`
 - runtime: `.codex/scripts/orchestrator.py`
 
 Post-migration testing helper:

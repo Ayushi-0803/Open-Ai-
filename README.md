@@ -36,6 +36,12 @@ Most of the framework lives under `.codex/`.
    /migrate
    ```
 
+   Or use the terminal wizard:
+
+   ```bash
+   python3 .codex/scripts/migrate_wizard.py
+   ```
+
 6. If `/migrate` is not available in your Codex runtime, use the fallback prompt:
 
    ```text
@@ -51,6 +57,8 @@ Most of the framework lives under `.codex/`.
    - optional reference path
    - optional test, build, and lint commands
    - non-negotiables
+     - choose a repo style guide from `styleguide/` or provide a custom one
+     - choose naming conventions from the selected style guide or provide custom rules
 
 8. Review the generated summary, confirm launch, and approve gated phases as the workflow progresses.
 

@@ -2699,6 +2699,10 @@ def build_context(manifest_path: str, phase_name: str) -> dict:
     # Add non-negotiables
     if meta.get("nonNegotiables"):
         ctx["non_negotiables"] = " | ".join(meta["nonNegotiables"])
+    if meta.get("styleGuides"):
+        ctx["style_guides"] = json.dumps(meta["styleGuides"], indent=2)
+    if meta.get("namingConventions"):
+        ctx["naming_conventions"] = json.dumps(meta["namingConventions"], indent=2)
 
     # Add test/build/lint commands
     for key in ("testCommand", "buildCommand", "lintCommand"):
