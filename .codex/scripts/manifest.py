@@ -4,6 +4,7 @@ This is the single source of truth for migration state.
 """
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -16,10 +17,15 @@ def load(path: str) -> dict:
 
 
 def save(path: str, manifest: dict):
-    """Save manifest to disk (atomic-ish via write + flush)."""
-    with open(path, 'w') as f:
-        json.dump(manifest, f, indent=2)
-        f.flush()
+    """Save manifest to disk atomically (write to temp, then rename)."""
+    target = Path(path)
+    tmp = target.with_suffix(".tmp")
+    try:
+        tmp.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        os.replace(str(tmp), str(target))
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def update_phase(path: str, phase: str, status: str, extra: Optional[dict] = None):

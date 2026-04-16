@@ -367,9 +367,6 @@ def phase_summary_path(sd: str, phase_config: dict) -> str:
 def refresh_phase_constants(phases: list[dict]) -> dict[str, dict]:
     return build_phase_index(phases)
 
-PHASES = TIER1_PHASES
-PHASE_CONFIG_BY_NAME = refresh_phase_constants(PHASES)
-
 SUPPORTED_FRAMEWORKS = {name for name, phases in PHASE_SETS.items() if all(is_phase_supported(p) for p in phases)}
 UNSUPPORTED_FRAMEWORKS = set(PHASE_SETS) - SUPPORTED_FRAMEWORKS
 
@@ -2260,11 +2257,6 @@ def maybe_add_phase_output_contract_dump(ctx: dict, phase_name: str):
 def maybe_prepare_context_extreme(ctx: dict, manifest_path: str, manifest_data: dict, phase_name: str):
     maybe_prepare_phase_ctx(ctx, manifest_path, manifest_data, phase_name)
     maybe_add_phase_output_contract_dump(ctx, phase_name)
-
-
-def build_context(manifest_path: str, phase_name: str) -> dict:
-    """Deprecated stub retained while the refactor is in progress."""
-    raise RuntimeError("unreachable stub: build_context is redefined later in the file")
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
