@@ -16,3 +16,6 @@ Canonical migration entry points:
 - skill: `.codex/skills/migrate/SKILL.md`
 - workflow contract: `.codex/commands/migrate.md`
 - runtime: `.codex/scripts/orchestrator.py`
+
+Post-migration testing helper:
+- skill: `.codex/skills/test-migrations/SKILL.md` to run target project tests using manifest-provided commands and capture artifacts under `artifacts/test-runs/`.

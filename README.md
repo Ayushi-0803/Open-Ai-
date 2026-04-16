@@ -124,6 +124,7 @@ foundation -> module_discovery -> domain_discovery -> conflict_resolution
 ## Key Files
 
 - `.codex/skills/migrate/SKILL.md`: primary migration entry point
+- `.codex/skills/test-migrations/SKILL.md`: run post-migration test workflows using the manifest’s test/build commands
 - `.codex/commands/migrate.md`: slash-command workflow contract
 - `.codex/scripts/orchestrator.py`: deterministic control plane
 - `.codex/scripts/manifest.py`: manifest state updates
@@ -156,6 +157,16 @@ foundation -> module_discovery -> domain_discovery -> conflict_resolution
 - a recipe id or explicit recipe path
 
 The framework itself uses Python stdlib only, so you do not need a virtual environment just to run the orchestrator.
+
+## Testing Workflow (local and CI)
+
+- `make install-dev` — create `.venv` and install dev tools (pytest, coverage, bandit).
+- `make test` — full suite with coverage for `.codex/scripts` (terminal report with missing lines).
+- `make test-unit` — fast path, excludes `@integration` tests.
+- `make test-integration` — filesystem-heavy contract checks.
+- `make coverage` — branch coverage plus HTML report at `htmlcov/index.html`.
+- `make lint` — run bandit on control-plane scripts.
+- `make compile` — byte-compile scripts to catch syntax errors.
 
 ## Outputs You Should Expect
 
