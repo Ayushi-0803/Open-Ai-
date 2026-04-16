@@ -536,6 +536,13 @@ These are the main gaps visible from the repo itself:
 
 This is the simple human flow.
 
+Important Codex note:
+
+```text
+Current Codex custom slash commands are loaded from ~/.codex/prompts/
+and are invoked as /prompts:<name>, not bare /migration.
+```
+
 ### Step 1: Clone the repo
 
 ```bash
@@ -569,15 +576,15 @@ Choose one:
 
 ### Step 4: Type `/`
 
-When the runtime reads the repo command folder, typing `/` should show the command list.
+For current Codex custom prompts, type `/prompts:`.
 
 You want to see:
 
 ```text
-/migration
+/prompts:migration
 ```
 
-If `/migration` shows up, the setup is working.
+If `/prompts:migration` shows up, the setup is working.
 
 ### Step 5: If needed, tweak the model
 
@@ -597,10 +604,10 @@ If you want to change the default model inside the repo, edit `[agent_runner.py]
 
 ### Step 6: Start using `/migration`
 
-Once the command appears in the slash menu, a human can do this:
+Once the prompt appears in the slash menu, a human can do this:
 
 1. type `/`
-2. select `migration`
+2. select `prompts:migration`
 3. answer the setup questions
 4. confirm source path, target path, recipe, and constraints
 5. let the orchestrator run
@@ -615,11 +622,12 @@ This repo is already wired for Codex first.
 Human steps:
 
 1. open the repo in Codex
-2. type `/`
-3. confirm `migration` is visible
-4. select `/migration`
+2. restart Codex after installing the prompt
+3. type `/prompts:`
+4. confirm `migration` is visible
+5. select `/prompts:migration`
 
-No extra tweak should be needed because this repo already contains `[.codex/commands/migration.md](/Users/harshit/Desktop/Hackathin/Open-Ai-/.codex/commands/migration.md)`.
+Codex uses custom prompts from `~/.codex/prompts/`, so installing the prompt there is the important step.
 
 #### Claude Code
 
@@ -645,17 +653,16 @@ Human steps:
 3. if yes, add a `migration` command wrapper in that command location
 4. if no, run the framework through the orchestrator and use Cursor only as the worker runtime
 
-### If `/migration` does not show up
+### If `/prompts:migration` does not show up in Codex
 
 Do these checks in order:
 
 ```text
 1. confirm the repo is opened at Open-Ai-/
-2. confirm the command file exists:
-   - .codex/commands/migration.md
-   - or .claude/commands/migration.md
-3. reload the tool window
-4. type / again
+2. confirm the prompt file exists:
+   - ~/.codex/prompts/migration.md
+3. restart Codex
+4. type /prompts: again
 ```
 
 ### Lowest-risk tweak rule
