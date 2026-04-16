@@ -31,6 +31,14 @@ Read from context:
 - `lintCommand`
 - `review_checks`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for prior failures and rewiring risk. If verification cannot be completed honestly, record the reason in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Task
 
 1. Review deterministic checks first.

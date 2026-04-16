@@ -24,6 +24,14 @@ Read from context:
 - `migration_order_path`
 - `foundation_summary_path`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for blockers and prior repairs. If the prebuilt module mapping is not credible, record the reason in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 Read these files before editing anything:
 - `{output_dir}/module-discovery.json`
 - `{output_dir}/MODULE_DISCOVERY.md`

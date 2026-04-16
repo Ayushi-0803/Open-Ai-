@@ -543,6 +543,9 @@ def build_manifest(config: dict) -> dict:
     experiment_dir = source_path.parent
     artifacts_dir = experiment_dir / "artifacts"
     summaries_dir = artifacts_dir / "migration-summaries"
+    run_control_dir = artifacts_dir / "run-control"
+    issue_ledger_path = run_control_dir / "ISSUE_LEDGER.md"
+    issue_ledger_json_path = run_control_dir / "issue-ledger.json"
     tier = config["tier"]
     framework_version = "tier-2" if tier == "high" else "tier-1"
     phases = {
@@ -557,6 +560,9 @@ def build_manifest(config: dict) -> dict:
         "targetPath": str(Path(config["targetPath"]).expanduser().resolve()),
         "artifactsDir": str(artifacts_dir),
         "summariesDir": str(summaries_dir),
+        "runControlDir": str(run_control_dir),
+        "issueLedgerPath": str(issue_ledger_path),
+        "issueLedgerJsonPath": str(issue_ledger_json_path),
         "referencePath": (
             str(Path(config["referencePath"]).expanduser().resolve())
             if config.get("referencePath")
@@ -632,10 +638,13 @@ def create_output_dirs(manifest_data: dict):
     meta = manifest_data["meta"]
     artifacts_dir = Path(meta["artifactsDir"])
     summaries_dir = Path(meta["summariesDir"])
+    run_control_dir = Path(meta.get("runControlDir", artifacts_dir / "run-control"))
     target_dir = Path(meta["targetPath"])
 
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     summaries_dir.mkdir(parents=True, exist_ok=True)
+    run_control_dir.mkdir(parents=True, exist_ok=True)
+    (run_control_dir / "phase-issues").mkdir(parents=True, exist_ok=True)
     target_dir.mkdir(parents=True, exist_ok=True)
     for phase_name in manifest_data["phases"]:
         (summaries_dir / phase_dir_name(phase_name)).mkdir(parents=True, exist_ok=True)
@@ -655,6 +664,8 @@ def print_summary(manifest_data: dict):
         print(f"            {meta['recipePath']}")
     print(f"  Tier:     {meta['tier']} ({meta['frameworkVersion']})")
     print(f"  Artifacts:{meta['artifactsDir']}")
+    print(f"  Control:  {meta['runControlDir']}")
+    print(f"  Ledger:   {meta['issueLedgerPath']}")
     print(f"  Manifest: {Path(meta['sourcePath']).parent / 'migration-manifest.json'}")
     if meta.get("referencePath"):
         print(f"  Reference:{meta['referencePath']}")

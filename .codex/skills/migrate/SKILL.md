@@ -22,6 +22,7 @@ Use it when the user says things like:
 Do not depend on `/migrate` slash-command discovery. If slash commands are unavailable in the current Codex surface, this skill is still the supported workflow entry point.
 
 If `.codex/scripts/migrate_wizard.py` exists and the user is starting a new migration, prefer running it in a TTY first. The wizard is the source of truth for terminal intake, including style-guide selection from `styleguide/` and naming-convention selection from the matching section files.
+Each run should also have `artifacts/run-control/ISSUE_LEDGER.md`, which is the source of truth for blockers, repairs, retries, and approval pauses once the orchestrator starts.
 
 ## Planning Policy
 
@@ -173,6 +174,10 @@ Write a tier-appropriate manifest with the correct phase set and metadata. Use `
 ## Step 5: Create Directories
 
 Create `artifactsDir` and `summariesDir`.
+Also create `artifacts/run-control/`, including:
+- `ISSUE_LEDGER.md`
+- `issue-ledger.json`
+- `phase-issues/`
 
 For Tier 1, create summary directories for:
 - discovery
@@ -222,18 +227,22 @@ After confirmation:
 3. surface approval gates in the conversation
 4. on approval, resume with `python3 .codex/scripts/orchestrator.py <manifest> --approve <phase> --non-interactive`
 
+If a phase result becomes stale because the framework was repaired mid-run, restart from that checkpoint with:
+- `python3 .codex/scripts/orchestrator.py <manifest> --restart-phase <phase> --non-interactive`
+
 Run the orchestrator in the background so the conversation stays responsive.
 
 ## Step 8: Monitor State
 
-Use `migration-manifest.json` as the source of truth.
+Use `migration-manifest.json` for phase state and `artifacts/run-control/ISSUE_LEDGER.md` for blocker history and iteration state.
 
 Loop:
 1. read the manifest
-2. if any phase is `awaiting_approval`, stop polling and surface the approval gate
-3. if `meta.status` is `failed`, report the failure briefly and stop
-4. if `meta.status` is `complete`, report success briefly and stop
-5. otherwise continue polling with terse progress updates
+2. read the issue ledger when the run appears stuck, repaired, or retried
+3. if any phase is `awaiting_approval`, stop polling and surface the approval gate
+4. if `meta.status` is `failed`, report the failure briefly and stop
+5. if `meta.status` is `complete`, report success briefly and stop
+6. otherwise continue polling with terse progress updates
 
 Do not dump full logs unless the user asks.
 

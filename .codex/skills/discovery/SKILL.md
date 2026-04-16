@@ -29,6 +29,14 @@ Read from your context variables:
 - `dynamic_risk_report_path` — deterministic dynamic/runtime-loading risk signals
 - `dependency_shards_dir` — bounded dependency shards for focused inspection
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for blockers and iteration history. If you hit a real blocker or contradiction, record it in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Your Task
 
 ### Step 1: Read the Deterministic Discovery Base

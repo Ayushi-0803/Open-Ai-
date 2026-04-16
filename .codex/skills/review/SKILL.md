@@ -36,6 +36,14 @@ Read from your context variables:
 
 Prefer the execution artifacts in `{execution_output}/execution-summary.json` and the explicit `batch_results` list when available.
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the run-level source of truth for prior failures and retries. If verification is blocked or the artifacts contradict each other, record the evidence in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Your Task
 
 ### Step 1: Read Execution Results

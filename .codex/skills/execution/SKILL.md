@@ -30,6 +30,14 @@ Read from your context variables:
 
 Even if batches are processed sequentially, preserve the planning intent by reporting which ones were marked parallelizable.
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Treat the ledger as the shared run context for retries and known blockers. If a file or batch cannot be migrated truthfully, record the reason in `{phase_issue_report_path}` instead of silently skipping it.
+
 ## Critical First Step
 
 Read `{agents_md_path}` completely before transforming any file. Follow it exactly.

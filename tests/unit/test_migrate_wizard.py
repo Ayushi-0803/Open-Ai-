@@ -109,6 +109,9 @@ def test_build_manifest_persists_styleguide_metadata(tmp_path, monkeypatch):
     assert manifest["meta"]["frameworkVersion"] == "tier-2"
     assert manifest["meta"]["sourceOrigin"] == "/tmp/original-source"
     assert manifest["meta"]["sourceImportMode"] == "copy"
+    assert manifest["meta"]["runControlDir"] == str(source_path.parent / "artifacts" / "run-control")
+    assert manifest["meta"]["issueLedgerPath"] == str(source_path.parent / "artifacts" / "run-control" / "ISSUE_LEDGER.md")
+    assert manifest["meta"]["issueLedgerJsonPath"] == str(source_path.parent / "artifacts" / "run-control" / "issue-ledger.json")
     assert manifest["meta"]["styleGuides"] == [{"source": "repo", "path": "styleguide/rust/style.md"}]
     assert manifest["meta"]["namingConventions"] == [
         {"source": "repo", "path": "styleguide/rust/sections/code-formatting-and-naming.md"}
@@ -206,3 +209,28 @@ def test_launch_orchestrator_detaches_stdin(tmp_path, monkeypatch):
     assert captured["stdin"] is migrate_wizard.subprocess.DEVNULL
     assert captured["start_new_session"] is True
     assert captured["cmd"][-5:] == ["--non-interactive", "--runtime", "codex", "--model", "gpt-5.4"]
+
+
+def test_create_output_dirs_creates_run_control_tree(tmp_path):
+    source_path = tmp_path / "source"
+    source_path.mkdir()
+    manifest = migrate_wizard.build_manifest(
+        {
+            "recipe": "example-generic",
+            "sourcePath": str(source_path),
+            "targetPath": str(tmp_path / "target"),
+            "referencePath": None,
+            "sourceDescription": "Python service",
+            "targetDescription": "Rust service",
+            "nonNegotiables": [],
+            "tier": "medium",
+            "styleGuides": [],
+            "namingConventions": [],
+        }
+    )
+
+    migrate_wizard.create_output_dirs(manifest)
+
+    run_control_dir = source_path.parent / "artifacts" / "run-control"
+    assert run_control_dir.is_dir()
+    assert (run_control_dir / "phase-issues").is_dir()

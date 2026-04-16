@@ -24,6 +24,14 @@ Read from context:
 - `symbol_registry_path`
 - `domain_discovery_overview_path`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the run-level source of truth for ownership problems. If a conflict cannot be resolved honestly, record it in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Task
 
 1. Review deterministic ownership conflicts from domain discovery.

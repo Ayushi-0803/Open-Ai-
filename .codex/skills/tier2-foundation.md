@@ -20,6 +20,14 @@ Read from context:
 - `domain_ordering`
 - `artifact_contracts`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared run context for blockers and repairs. If the deterministic foundation is materially wrong or a required domain assumption is missing, record it in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 The deterministic builder has already written:
 - `foundation-summary.json`
 - `discovery.graph.json`

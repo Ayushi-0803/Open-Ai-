@@ -20,6 +20,14 @@ Read from context:
 - `testCommand`
 - `buildCommand`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for unresolved failures. If a fix would be speculative, record the blocker in `{phase_issue_report_path}` instead of pretending the issue is solved.
+
 ## Task
 
 Read `integration-review.json` first. Fix only the highest-value failures and keep per-domain artifacts truthful.

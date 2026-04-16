@@ -22,5 +22,7 @@ The wizard can import an external local project into `experiments/imported-sourc
 or clone a git URL there before writing the manifest. That keeps the migration
 run inside the repo workspace and reduces follow-up permission prompts.
 
+During an active run, use `artifacts/run-control/ISSUE_LEDGER.md` as the human-readable source of truth for blockers, repairs, retries, and approval pauses.
+
 Post-migration testing helper:
 - skill: `.codex/skills/test-migrations/SKILL.md` to run target project tests using manifest-provided commands and capture artifacts under `artifacts/test-runs/`.

@@ -39,6 +39,14 @@ Read from context:
 - `reference_path`
 - `non_negotiables`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for cross-domain constraints and repairs. If a domain plan cannot be made truthful with the current inputs, record the gap in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Required Per-Domain Contracts
 
 `decoupled-files.<domain>.json`:

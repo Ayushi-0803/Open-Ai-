@@ -72,6 +72,12 @@ Most of the framework lives under `.codex/`.
    artifacts/migration-summaries/
    ```
 
+10. Use the run-control ledger as the live source of truth for blockers, retries, and repair history:
+
+   ```text
+   artifacts/run-control/ISSUE_LEDGER.md
+   ```
+
 ## What The Project Does
 
 Given a source codebase, a target location, and a recipe, the framework:
@@ -81,6 +87,7 @@ Given a source codebase, a target location, and a recipe, the framework:
 3. runs a phase-based orchestrator
 4. stores machine-readable and human-readable artifacts
 5. pauses for approvals at key checkpoints
+6. records run-level blockers and retries in `artifacts/run-control/ISSUE_LEDGER.md`
 
 ## End-to-End Flow
 

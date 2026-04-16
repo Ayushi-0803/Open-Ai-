@@ -31,6 +31,14 @@ Read from your context variables:
 
 Read the deterministic planning contract first before doing anything else.
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the run-level source of truth for blockers and prior repairs. If you hit a real contradiction or missing prerequisite, record it in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Your Task
 
 ### Step 1: Determine Migration Order

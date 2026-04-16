@@ -27,6 +27,14 @@ Read from context:
 - `buildCommand`
 - `lintCommand`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Treat the ledger as the shared run context for retries and known blockers. If a domain cannot be executed truthfully, record the reason in `{phase_issue_report_path}` in addition to the per-domain execution ledger.
+
 ## Task
 
 1. Execute domains in dependency-safe order from `domain-plan-overview.json`.

@@ -31,6 +31,14 @@ Read from context:
 - `migration_order_path`
 - `module_discovery_path`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for blockers and domain-boundary disputes. If ownership cannot be assigned truthfully, record the evidence in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Task
 
 1. Check each domain’s prebuilt ownership claims against the deterministic foundation.

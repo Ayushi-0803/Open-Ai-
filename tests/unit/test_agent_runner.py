@@ -1,32 +1,57 @@
-import threading
-import time
-from pathlib import Path
+import subprocess
 
 import agent_runner
 
 
-def test_poll_for_completion_success(tmp_path):
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
+def test_run_with_heartbeat_calls_callback(monkeypatch):
+    callbacks: list[int] = []
 
-    def writer():
-        time.sleep(0.02)
-        (output_dir / "DONE.md").write_text("ok", encoding="utf-8")
+    class _FakeProcess:
+        def __init__(self):
+            self.returncode = 0
+            self.calls = 0
 
-    t = threading.Thread(target=writer)
-    t.start()
+        def communicate(self, input=None, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise subprocess.TimeoutExpired(cmd=["codex"], timeout=timeout)
+            return ("ok", "")
 
-    result = agent_runner.poll_for_completion(str(output_dir), ["DONE.md"], timeout=1, interval=0.01)
+        def kill(self):
+            raise AssertionError("kill should not be called in this test")
 
-    t.join()
-    assert result == "success"
+    monkeypatch.setattr(agent_runner.subprocess, "Popen", lambda *args, **kwargs: _FakeProcess())
+
+    result = agent_runner._run_with_heartbeat(
+        ["codex", "exec"],
+        prompt="prompt",
+        cwd=".",
+        runtime="codex",
+        timeout=60,
+        on_heartbeat=callbacks.append,
+        heartbeat_interval=1,
+    )
+
+    assert result["exit_code"] == 0
+    assert result["stdout"] == "ok"
+    assert callbacks
 
 
-def test_poll_for_completion_failure(tmp_path):
-    output_dir = tmp_path / "out"
-    output_dir.mkdir()
-    (output_dir / "ERROR").write_text("boom", encoding="utf-8")
+def test_spawn_codex_uses_ephemeral_sessions(monkeypatch, tmp_path):
+    skill_path = tmp_path / "skill.md"
+    skill_path.write_text("Skill body\n", encoding="utf-8")
+    captured = {}
 
-    result = agent_runner.poll_for_completion(str(output_dir), ["DONE.md"], timeout=0.1, interval=0.01)
+    def _fake_run(cmd, *, prompt, cwd, runtime, timeout, on_heartbeat=None, heartbeat_interval=30):
+        captured["cmd"] = cmd
+        captured["prompt"] = prompt
+        captured["cwd"] = cwd
+        captured["runtime"] = runtime
+        return {"exit_code": 0, "stdout": "", "stderr": "", "runtime": runtime}
 
-    assert result == "failure"
+    monkeypatch.setattr(agent_runner, "_run_with_heartbeat", _fake_run)
+
+    result = agent_runner.spawn_codex(str(skill_path), {"working_dir": str(tmp_path)})
+
+    assert result["runtime"] == "codex"
+    assert captured["cmd"][:4] == ["codex", "exec", "--ephemeral", "--full-auto"]

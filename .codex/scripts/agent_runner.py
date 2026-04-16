@@ -4,12 +4,14 @@ Supports Codex CLI, Claude Code, and Cursor CLI.
 The runtime is auto-detected or configurable, with Codex preferred.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 
 # ── Runtime detection ────────────────────────────────────────────────
@@ -47,9 +49,60 @@ def _build_prompt(skill_path: str, context: dict) -> str:
     return f"{skill_content}\n\n{context_section}"
 
 
+def _run_with_heartbeat(
+    cmd: list[str],
+    *,
+    prompt: str,
+    cwd: str,
+    runtime: str,
+    timeout: int,
+    on_heartbeat: Optional[Callable[[int], None]] = None,
+    heartbeat_interval: int = 30,
+) -> dict:
+    process = subprocess.Popen(
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=cwd,
+    )
+    start = time.time()
+    pending_input: str | None = prompt
+
+    while True:
+        elapsed = time.time() - start
+        remaining = timeout - elapsed
+        if remaining <= 0:
+            process.kill()
+            stdout, stderr = process.communicate()
+            return {
+                "exit_code": -1,
+                "stdout": stdout or "",
+                "stderr": (stderr or "").strip() or "TIMEOUT",
+                "runtime": runtime,
+            }
+
+        wait_timeout = min(heartbeat_interval, max(1, int(remaining))) if on_heartbeat else remaining
+        try:
+            stdout, stderr = process.communicate(input=pending_input, timeout=wait_timeout)
+            return {
+                "exit_code": process.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+                "runtime": runtime,
+            }
+        except subprocess.TimeoutExpired:
+            pending_input = None
+            if on_heartbeat:
+                on_heartbeat(int(time.time() - start))
+
+
 def spawn_claude_code(skill_path: str, context: dict,
                       model: Optional[str] = None,
-                      timeout: int = 1800) -> dict:
+                      timeout: int = 1800,
+                      on_heartbeat: Optional[Callable[[int], None]] = None,
+                      heartbeat_interval: int = 30) -> dict:
     """Spawn a Claude Code sub-agent."""
     prompt = _build_prompt(skill_path, context)
     allowed_tools = context.get("allowed_tools", "Read,Write,Edit,Bash,Glob,Grep")
@@ -58,56 +111,51 @@ def spawn_claude_code(skill_path: str, context: dict,
         cmd.extend(["--model", model])
 
     try:
-        result = subprocess.run(
+        return _run_with_heartbeat(
             cmd,
-            input=prompt,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
+            prompt=prompt,
             cwd=context.get("working_dir", os.getcwd()),
+            runtime="claude-code",
+            timeout=timeout,
+            on_heartbeat=on_heartbeat,
+            heartbeat_interval=heartbeat_interval,
         )
-        return {
-            "exit_code": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "runtime": "claude-code",
-        }
     except subprocess.TimeoutExpired:
         return {"exit_code": -1, "stdout": "", "stderr": "TIMEOUT", "runtime": "claude-code"}
 
 
 def spawn_codex(skill_path: str, context: dict,
                 model: Optional[str] = None,
-                timeout: int = 1800) -> dict:
+                timeout: int = 1800,
+                on_heartbeat: Optional[Callable[[int], None]] = None,
+                heartbeat_interval: int = 30) -> dict:
     """Spawn a Codex CLI sub-agent."""
     prompt = _build_prompt(skill_path, context)
 
-    cmd = ["codex", "exec", "--full-auto", "--sandbox", "workspace-write"]
+    cmd = ["codex", "exec", "--ephemeral", "--full-auto", "--sandbox", "workspace-write"]
     if model:
         cmd.extend(["--model", model])
     cmd.extend(["--", prompt])
 
     try:
-        result = subprocess.run(
+        return _run_with_heartbeat(
             cmd,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
+            prompt=prompt,
             cwd=context.get("working_dir", os.getcwd()),
+            runtime="codex",
+            timeout=timeout,
+            on_heartbeat=on_heartbeat,
+            heartbeat_interval=heartbeat_interval,
         )
-        return {
-            "exit_code": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "runtime": "codex",
-        }
     except subprocess.TimeoutExpired:
         return {"exit_code": -1, "stdout": "", "stderr": "TIMEOUT", "runtime": "codex"}
 
 
 def spawn_cursor(skill_path: str, context: dict,
                  model: Optional[str] = None,
-                 timeout: int = 1800) -> dict:
+                 timeout: int = 1800,
+                 on_heartbeat: Optional[Callable[[int], None]] = None,
+                 heartbeat_interval: int = 30) -> dict:
     """Spawn a Cursor CLI sub-agent."""
     prompt = _build_prompt(skill_path, context)
     
@@ -122,19 +170,15 @@ def spawn_cursor(skill_path: str, context: dict,
     cmd.extend(["--", prompt])
 
     try:
-        result = subprocess.run(
+        return _run_with_heartbeat(
             cmd,
-            timeout=timeout,
-            capture_output=True,
-            text=True,
+            prompt=prompt,
             cwd=context.get("working_dir", os.getcwd()),
+            runtime="cursor",
+            timeout=timeout,
+            on_heartbeat=on_heartbeat,
+            heartbeat_interval=heartbeat_interval,
         )
-        return {
-            "exit_code": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "runtime": "cursor",
-        }
     except subprocess.TimeoutExpired:
         return {"exit_code": -1, "stdout": "", "stderr": "TIMEOUT", "runtime": "cursor"}
 
@@ -151,7 +195,9 @@ RUNTIME_SPAWNERS = {
 def spawn_agent(skill_path: str, context: dict,
                 runtime: Optional[str] = None,
                 model: Optional[str] = "gpt-5.4",
-                timeout: int = 1800) -> dict:
+                timeout: int = 1800,
+                on_heartbeat: Optional[Callable[[int], None]] = None,
+                heartbeat_interval: int = 30) -> dict:
     """
     Spawn a sub-agent using the specified or auto-detected runtime.
     
@@ -175,7 +221,14 @@ def spawn_agent(skill_path: str, context: dict,
             f"Supported: {list(RUNTIME_SPAWNERS.keys())}"
         )
 
-    return spawner(skill_path, context, model=model, timeout=timeout)
+    return spawner(
+        skill_path,
+        context,
+        model=model,
+        timeout=timeout,
+        on_heartbeat=on_heartbeat,
+        heartbeat_interval=heartbeat_interval,
+    )
 
 
 # ── Filesystem polling ───────────────────────────────────────────────

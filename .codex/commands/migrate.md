@@ -11,6 +11,7 @@ Your job is NARROW: gather inputs, validate them, write the manifest, and hand o
 If the current Codex surface does not expose `/migrate` as a slash command, use the same workflow through the `migrate` skill at `.codex/skills/migrate/SKILL.md`. The skill and this command are intended to stay behaviorally aligned.
 
 If `.codex/scripts/migrate_wizard.py` exists and the user is starting a new migration, prefer running it in a TTY first. The wizard is the terminal intake path for source/target metadata and non-negotiables, including repo style-guide and naming-convention selection.
+Once launched, the run-level source of truth for blockers and iteration state is `artifacts/run-control/ISSUE_LEDGER.md`.
 
 ## Planning Policy
 
@@ -93,6 +94,14 @@ If the source is outside the current workspace, prefer importing it into
 `experiments/imported-sources/` first. If the input is a git URL, clone it
 there. This keeps the migration run inside the repo workspace and avoids
 repeated permission prompts during monitoring.
+
+Every run should also create:
+- `artifacts/run-control/ISSUE_LEDGER.md`
+- `artifacts/run-control/issue-ledger.json`
+- `artifacts/run-control/phase-issues/`
+
+If a phase result is stale after a framework fix, restart from that checkpoint with:
+- `python3 .codex/scripts/orchestrator.py <manifest> --restart-phase <phase> --non-interactive`
 
 ## Step 2: Determine Tier
 

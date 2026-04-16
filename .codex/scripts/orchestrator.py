@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 Migration Orchestrator — deterministic state machine.
 
@@ -385,6 +387,17 @@ PHASE_OUTPUTS = {
     'domain_execution': 'domain-execution',
     'rewiring': 'rewiring',
     'integration_review': 'integration-review',
+}
+
+PREBUILT_SUCCESS_PHASES = {
+    "foundation",
+    "module_discovery",
+    "domain_discovery",
+    "conflict_resolution",
+    "domain_planning",
+    "domain_execution",
+    "rewiring",
+    "integration_review",
 }
 
 
@@ -2258,55 +2271,10 @@ def build_context(manifest_path: str, phase_name: str) -> dict:
 # Configuration
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Phases run in this order. Each entry:
-#   name:             phase identifier (matches manifest key)
-#   skill:            skill filename in skills/ directory
-#   success_marker:   filename that indicates the agent succeeded
-#   needs_approval:   whether to block for human approval after completion
-#   context_builder:  function name that builds phase-specific context dict
-
-PHASES = [
-    {
-        "name": "discovery",
-        "skill": "discovery.md",
-        "success_marker": "DISCOVERY.md",
-        "needs_approval": True,
-        "allowed_tools": "Read,Bash,Glob,Grep",
-        "artifact_validator": "discovery",
-    },
-    {
-        "name": "planning",
-        "skill": "planning.md",
-        "success_marker": "PLAN.md",
-        "needs_approval": True,
-        "allowed_tools": "Read,Write,Bash,Glob,Grep",
-        "artifact_validator": "planning",
-    },
-    {
-        "name": "execution",
-        "skill": "execution.md",
-        "success_marker": "EXECUTION.md",
-        "needs_approval": False,
-        "allowed_tools": "Read,Write,Edit,Bash,Glob,Grep",
-        "artifact_validator": "execution",
-    },
-    {
-        "name": "review",
-        "skill": "review.md",
-        "success_marker": "REVIEW.md",
-        "needs_approval": True,
-        "allowed_tools": "Read,Write,Bash,Glob,Grep",
-        "artifact_validator": "review",
-    },
-    {
-        "name": "reiterate",
-        "skill": "reiterate.md",
-        "success_marker": "REITERATE.md",
-        "needs_approval": True,
-        "allowed_tools": "Read,Write,Edit,Bash,Glob,Grep",
-        "artifact_validator": "reiterate",
-    },
-]
+# The active phase set is always resolved from the manifest at runtime.
+# Keep a tier-1 default here so older helpers still have a non-empty phase map
+# before the manifest is loaded.
+PHASES = TIER1_PHASES
 
 # How many times to retry a failed phase
 MAX_RETRIES = 2
@@ -2344,7 +2312,7 @@ PLANNING_ARTIFACT_CONTRACTS = [
 REVIEW_CHECKS = ["build", "tests", "lint", "diff"]
 
 EXECUTION_BATCH_SUCCESS_MARKER = "batch-{batch_id}-results.json"
-PHASE_CONFIG_BY_NAME = {phase["name"]: phase for phase in PHASES}
+PHASE_CONFIG_BY_NAME = refresh_phase_constants(PHASES)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2374,6 +2342,310 @@ def banner(msg: str, char="━"):
 def log_and_print(manifest_path: str, message: str):
     print(message)
     log_event(manifest_path, message)
+
+
+def utc_timestamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def get_run_control_dir(manifest_path: str) -> Path:
+    meta = mf.load(manifest_path)["meta"]
+    artifacts_dir = Path(meta.get("artifactsDir", "."))
+    return Path(meta.get("runControlDir", artifacts_dir / "run-control"))
+
+
+def get_issue_ledger_paths(manifest_path: str) -> tuple[Path, Path]:
+    meta = mf.load(manifest_path)["meta"]
+    run_control_dir = get_run_control_dir(manifest_path)
+    markdown_path = Path(meta.get("issueLedgerPath", run_control_dir / "ISSUE_LEDGER.md"))
+    json_path = Path(meta.get("issueLedgerJsonPath", run_control_dir / "issue-ledger.json"))
+    return markdown_path, json_path
+
+
+def get_phase_issue_report_path(manifest_path: str, phase_name: str) -> Path:
+    return get_run_control_dir(manifest_path) / "phase-issues" / f"{phase_name}.md"
+
+
+def build_issue_ledger(manifest_path: str, manifest_data: dict | None = None) -> dict:
+    if manifest_data is None:
+        manifest_data = mf.load(manifest_path)
+    meta = manifest_data.get("meta", {})
+    return {
+        "sessionId": meta.get("sessionId", "unknown"),
+        "manifestPath": str(Path(manifest_path).resolve()),
+        "frameworkVersion": meta.get("frameworkVersion", "tier-1"),
+        "tier": meta.get("tier", "medium"),
+        "sourcePath": meta.get("sourcePath", ""),
+        "targetPath": meta.get("targetPath", ""),
+        "status": meta.get("status", "pending"),
+        "currentPhase": None,
+        "currentAttempt": None,
+        "issues": [],
+        "events": [],
+        "lastUpdatedAt": utc_timestamp(),
+    }
+
+
+def render_issue_ledger_markdown(ledger: dict) -> str:
+    lines = [
+        "# Issue Ledger",
+        "",
+        "This file is the run-level source of truth for blockers, repairs, retries, and approvals.",
+        "Use this file instead of chat history when the run state looks ambiguous.",
+        "",
+        "## Current State",
+        "",
+        f"- Session: `{ledger.get('sessionId', 'unknown')}`",
+        f"- Status: `{ledger.get('status', 'pending')}`",
+        f"- Framework: `{ledger.get('frameworkVersion', 'tier-1')}`",
+        f"- Current phase: `{ledger.get('currentPhase') or 'none'}`",
+        f"- Current attempt: `{ledger.get('currentAttempt') or 0}`",
+        f"- Manifest: `{ledger.get('manifestPath', '')}`",
+        "",
+        "## Open Issues",
+        "",
+    ]
+
+    issues = [item for item in ledger.get("issues", []) if item.get("status") == "open"]
+    if issues:
+        for issue in issues:
+            lines.append(
+                f"- `{issue.get('id', 'issue')}` [{issue.get('phase') or 'run'} / {issue.get('category', 'issue')}] {issue.get('summary', '')}"
+            )
+            if issue.get("details"):
+                lines.append(f"  Details: {issue['details']}")
+            if issue.get("evidence"):
+                lines.append(f"  Evidence: {', '.join(issue['evidence'])}")
+    else:
+        lines.append("- None.")
+
+    lines.extend(["", "## Resolved Issues", ""])
+    resolved = [item for item in ledger.get("issues", []) if item.get("status") != "open"]
+    if resolved:
+        for issue in resolved:
+            lines.append(
+                f"- `{issue.get('id', 'issue')}` [{issue.get('phase') or 'run'} / {issue.get('category', 'issue')}] {issue.get('summary', '')}"
+            )
+            if issue.get("details"):
+                lines.append(f"  Details: {issue['details']}")
+    else:
+        lines.append("- None.")
+
+    lines.extend(["", "## Iteration History", ""])
+    events = ledger.get("events", [])
+    if events:
+        for event in events:
+            phase = event.get("phase") or "run"
+            attempt = event.get("attempt")
+            attempt_text = f" attempt={attempt}" if attempt is not None else ""
+            lines.append(
+                f"- `{event.get('timestamp', '')}` [{event.get('type', 'event')}] phase={phase}{attempt_text} {event.get('message', '')}".rstrip()
+            )
+            if event.get("evidence"):
+                lines.append(f"  Evidence: {', '.join(event['evidence'])}")
+    else:
+        lines.append("- No events recorded yet.")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def load_issue_ledger(manifest_path: str, manifest_data: dict | None = None) -> dict:
+    markdown_path, json_path = get_issue_ledger_paths(manifest_path)
+    if json_path.exists():
+        try:
+            ledger = json.loads(json_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            ledger = build_issue_ledger(manifest_path, manifest_data)
+    else:
+        ledger = build_issue_ledger(manifest_path, manifest_data)
+
+    ledger.setdefault("issues", [])
+    ledger.setdefault("events", [])
+    ledger.setdefault("status", (manifest_data or mf.load(manifest_path)).get("meta", {}).get("status", "pending"))
+    ledger.setdefault("currentPhase", None)
+    ledger.setdefault("currentAttempt", None)
+    ledger["lastUpdatedAt"] = utc_timestamp()
+    markdown_path.parent.mkdir(parents=True, exist_ok=True)
+    return ledger
+
+
+def save_issue_ledger(manifest_path: str, ledger: dict):
+    markdown_path, json_path = get_issue_ledger_paths(manifest_path)
+    ledger["lastUpdatedAt"] = utc_timestamp()
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
+    markdown_path.write_text(render_issue_ledger_markdown(ledger), encoding="utf-8")
+
+
+def initialize_run_control(manifest_path: str, manifest_data: dict | None = None):
+    run_control_dir = get_run_control_dir(manifest_path)
+    run_control_dir.mkdir(parents=True, exist_ok=True)
+    (run_control_dir / "phase-issues").mkdir(parents=True, exist_ok=True)
+    ledger = load_issue_ledger(manifest_path, manifest_data)
+    save_issue_ledger(manifest_path, ledger)
+
+
+def update_issue_ledger_state(
+    manifest_path: str,
+    *,
+    status: str | None = None,
+    phase: str | None = None,
+    attempt: int | None = None,
+):
+    ledger = load_issue_ledger(manifest_path)
+    if status is not None:
+        ledger["status"] = status
+    if phase is not None:
+        ledger["currentPhase"] = phase
+    if attempt is not None:
+        ledger["currentAttempt"] = attempt
+    save_issue_ledger(manifest_path, ledger)
+
+
+def append_issue_ledger_event(
+    manifest_path: str,
+    event_type: str,
+    message: str,
+    *,
+    phase: str | None = None,
+    attempt: int | None = None,
+    evidence: list[str] | None = None,
+):
+    ledger = load_issue_ledger(manifest_path)
+    ledger["events"].append(
+        {
+            "timestamp": utc_timestamp(),
+            "type": event_type,
+            "phase": phase,
+            "attempt": attempt,
+            "message": message,
+            "evidence": evidence or [],
+        }
+    )
+    save_issue_ledger(manifest_path, ledger)
+
+
+def record_issue(
+    manifest_path: str,
+    *,
+    category: str,
+    summary: str,
+    details: str = "",
+    phase: str | None = None,
+    attempt: int | None = None,
+    evidence: list[str] | None = None,
+    status: str = "open",
+):
+    ledger = load_issue_ledger(manifest_path)
+    issue_id = f"issue-{len(ledger['issues']) + 1:04d}"
+    ledger["issues"].append(
+        {
+            "id": issue_id,
+            "timestamp": utc_timestamp(),
+            "status": status,
+            "category": category,
+            "phase": phase,
+            "attempt": attempt,
+            "summary": summary,
+            "details": details,
+            "evidence": evidence or [],
+        }
+    )
+    save_issue_ledger(manifest_path, ledger)
+    return issue_id
+
+
+def ensure_phase_issue_report(manifest_path: str, phase_name: str):
+    phase_issue_path = get_phase_issue_report_path(manifest_path, phase_name)
+    if phase_issue_path.exists():
+        return
+    phase_issue_path.parent.mkdir(parents=True, exist_ok=True)
+    phase_issue_path.write_text(
+        "\n".join(
+            [
+                f"# Phase Issue Report: {phase_name}",
+                "",
+                "Use this file to capture blockers, contradictions, or evidence that does not fit the main summary artifact.",
+                "If the phase succeeds cleanly, this file may remain unchanged.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def mark_phase_failure(
+    manifest_path: str,
+    phase_name: str,
+    error_msg: str,
+    *,
+    attempt: int | None = None,
+    evidence: list[str] | None = None,
+) -> bool:
+    cleaned_evidence = [item for item in (evidence or []) if item]
+    append_issue_ledger_event(
+        manifest_path,
+        "phase_failed",
+        f"{phase_name} failed: {error_msg}",
+        phase=phase_name,
+        attempt=attempt,
+        evidence=cleaned_evidence,
+    )
+    record_issue(
+        manifest_path,
+        category="phase_failure",
+        summary=f"{phase_name} failed",
+        details=error_msg,
+        phase=phase_name,
+        attempt=attempt,
+        evidence=cleaned_evidence,
+        status="open",
+    )
+    update_issue_ledger_state(manifest_path, status="failed", phase=phase_name, attempt=attempt)
+    mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+    return False
+
+
+def reconcile_manifest_phase_set(manifest_path: str) -> tuple[dict, dict | None]:
+    manifest_data = mf.load(manifest_path)
+    expected_phase_names = get_phase_names(manifest_data)
+    actual_phases = manifest_data.get("phases", {})
+    expected_set = set(expected_phase_names)
+    actual_set = set(actual_phases)
+    if expected_set == actual_set:
+        return manifest_data, None
+
+    repaired_phases: dict[str, dict] = {}
+    missing = [name for name in expected_phase_names if name not in actual_phases]
+    unexpected = [name for name in actual_phases if name not in expected_set]
+    for phase_name in expected_phase_names:
+        repaired_phases[phase_name] = actual_phases.get(phase_name, {"status": "pending"})
+    manifest_data["phases"] = repaired_phases
+    repairs = manifest_data.setdefault("meta", {}).setdefault("phaseAlignmentRepairs", [])
+    repairs.append(
+        {
+            "timestamp": utc_timestamp(),
+            "missing": missing,
+            "unexpected": unexpected,
+        }
+    )
+    mf.save(manifest_path, manifest_data)
+    return manifest_data, {"missing": missing, "unexpected": unexpected}
+
+
+def restart_from_phase(manifest_path: str, manifest_data: dict, phase_name: str) -> dict:
+    phases = get_phase_set(manifest_data)
+    restart_index = get_phase_resume_index(phases, phase_name)
+    manifest = mf.load(manifest_path)
+    for phase in phases[restart_index:]:
+        phase_state = manifest.setdefault("phases", {}).setdefault(phase["name"], {})
+        phase_state["status"] = "pending"
+        for key in ("completedAt", "approvedAt", "failedAt", "awaitingApprovalAt", "error"):
+            phase_state.pop(key, None)
+    manifest.setdefault("meta", {})["status"] = "pending"
+    mf.save(manifest_path, manifest)
+    return manifest
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2653,6 +2925,10 @@ def build_context(manifest_path: str, phase_name: str) -> dict:
         "output_dir": output_dir,
         "working_dir": os.getcwd(),
         "artifact_contracts": VALIDATION_REPORTS.get(phase_name, []),
+        "run_control_dir": str(get_run_control_dir(manifest_path)),
+        "issue_ledger_path": str(get_issue_ledger_paths(manifest_path)[0]),
+        "issue_ledger_json_path": str(get_issue_ledger_paths(manifest_path)[1]),
+        "phase_issue_report_path": str(get_phase_issue_report_path(manifest_path, phase_name)),
     }
     if recipe_assets:
         ctx.update(recipe_assets)
@@ -2944,7 +3220,8 @@ def collect_phase_artifacts(phase_name: str, output_dir: str) -> dict:
 def run_phase(manifest_path: str, phase_config: dict,
               runtime: str = None, model: str = None,
               skip_approval: bool = False,
-              non_interactive: bool = False) -> bool:
+              non_interactive: bool = False,
+              attempt: int = 1) -> bool:
     """
     Run a single migration phase:
       1. Create output directory
@@ -2965,14 +3242,33 @@ def run_phase(manifest_path: str, phase_config: dict,
 
     # Special case: skip reiterate if review passed everything
     manifest_data = mf.load(manifest_path)
+    maybe_update_phase_index(manifest_data)
     if phase_name == "reiterate" and should_skip_reiterate(manifest_path, manifest_data):
         print(f"\n  → {phase_name}: no failures to reiterate, skipping")
         mf.update_phase(manifest_path, phase_name, "done",
                         extra={"skipped": True, "reason": "no failures in review"})
+        update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
+        append_issue_ledger_event(
+            manifest_path,
+            "phase_skipped",
+            f"{phase_name} skipped because review found no failures.",
+            phase=phase_name,
+            attempt=attempt,
+        )
         return True
 
     phase_header(phase_name)
     log_event(manifest_path, f"phase={phase_name} status=starting")
+    ensure_phase_issue_report(manifest_path, phase_name)
+    update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
+    append_issue_ledger_event(
+        manifest_path,
+        "phase_started",
+        f"{phase_name} started.",
+        phase=phase_name,
+        attempt=attempt,
+        evidence=[str(get_phase_issue_report_path(manifest_path, phase_name))],
+    )
 
     sd = get_summaries_dir(manifest_path)
     output_dir = phase_output_dir(sd, phase_name)
@@ -2984,8 +3280,13 @@ def run_phase(manifest_path: str, phase_config: dict,
     if phase_name not in {"discovery", "foundation", "module_discovery"} and context.get("recipe_required_error"):
         error_msg = context["recipe_required_error"]
         log_and_print(manifest_path, f"  ✗ {phase_name} requires a recipe: {error_msg}")
-        mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-        return False
+        return mark_phase_failure(
+            manifest_path,
+            phase_name,
+            error_msg,
+            attempt=attempt,
+            evidence=[context.get("issue_ledger_path"), context.get("phase_issue_report_path")],
+        )
 
     success_path = os.path.join(output_dir, success_marker)
     error_path = os.path.join(output_dir, "ERROR")
@@ -3006,8 +3307,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [context["source_path"], output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir],
+            )
     if phase_name == "discovery":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3016,8 +3322,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [context["source_path"], output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir],
+            )
     if phase_name == "planning":
         discovery_dir = str(Path(sd) / "discovery")
         ok, error_msg = run_python_builder(
@@ -3027,8 +3338,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [discovery_dir, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, discovery_dir],
+            )
     if phase_name == "module_discovery":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3037,8 +3353,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [phase_output_dir(sd, "foundation"), output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, phase_output_dir(sd, "foundation")],
+            )
     if phase_name == "domain_discovery":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3047,8 +3368,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
     if phase_name == "conflict_resolution":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3057,8 +3383,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
     if phase_name == "domain_planning":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3067,8 +3398,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
     if phase_name == "domain_execution":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3077,8 +3413,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
     if phase_name == "rewiring":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3087,8 +3428,13 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
     if phase_name in {"review", "integration_review"} and RECIPE_VERIFY_RUNNER.exists():
         log_and_print(manifest_path, "  → Running deterministic recipe parity checks...")
         try:
@@ -3100,8 +3446,13 @@ def run_phase(manifest_path: str, phase_config: dict,
         except RuntimeError as exc:
             error_msg = str(exc)
             log_and_print(manifest_path, f"  ✗ deterministic recipe verification failed: {error_msg}")
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir],
+            )
     if phase_name == "integration_review":
         ok, error_msg = run_python_builder(
             manifest_path,
@@ -3110,24 +3461,43 @@ def run_phase(manifest_path: str, phase_config: dict,
             [manifest_path, output_dir],
         )
         if not ok:
-            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
-            return False
+            return mark_phase_failure(
+                manifest_path,
+                phase_name,
+                error_msg,
+                attempt=attempt,
+                evidence=[output_dir, manifest_path],
+            )
 
     # ── 1. Update manifest: starting ──
     mf.update_phase(manifest_path, phase_name, "in_progress")
     log_and_print(manifest_path, f"  [manifest] {phase_name} → in_progress")
+    append_issue_ledger_event(
+        manifest_path,
+        "phase_manifest_in_progress",
+        f"{phase_name} marked in_progress in the manifest.",
+        phase=phase_name,
+        attempt=attempt,
+        evidence=[manifest_path],
+    )
 
     # ── 2. Build context for this phase ──
     context["allowed_tools"] = phase_config.get("allowed_tools", "Read,Write,Edit,Bash,Glob,Grep")
+    context["phase_attempt"] = str(attempt)
+    context["max_phase_retries"] = str(MAX_RETRIES)
 
     # ── 3. Resolve skill file path ──
     resolved_skill_path = resolve_skill_path(skill_file)
     if resolved_skill_path is None:
         skill_path = str(FRAMEWORK_DIR / "skills" / skill_file)
         print(f"  ✗ Skill file not found: {skill_path}")
-        mf.update_phase(manifest_path, phase_name, "failed",
-                        extra={"error": f"Skill file not found: {skill_path}"})
-        return False
+        return mark_phase_failure(
+            manifest_path,
+            phase_name,
+            f"Skill file not found: {skill_path}",
+            attempt=attempt,
+            evidence=[skill_path],
+        )
     skill_path = str(resolved_skill_path)
 
     # ── 4. Spawn the agent ──
@@ -3136,12 +3506,25 @@ def run_phase(manifest_path: str, phase_config: dict,
     log_and_print(manifest_path, f"    Output:  {output_dir}")
     log_and_print(manifest_path, f"    Runtime: {runtime or 'auto-detect'}")
 
+    def _heartbeat_callback(elapsed_seconds: int):
+        message = f"{phase_name} agent still running after {elapsed_seconds}s."
+        log_and_print(manifest_path, f"    [heartbeat] {message}")
+        append_issue_ledger_event(
+            manifest_path,
+            "phase_heartbeat",
+            message,
+            phase=phase_name,
+            attempt=attempt,
+            evidence=[skill_path, output_dir],
+        )
+
     result = spawn_agent(
         skill_path=skill_path,
         context=context,
         runtime=runtime,
         model=model,
         timeout=AGENT_TIMEOUT,
+        on_heartbeat=_heartbeat_callback,
     )
 
     log_and_print(manifest_path, f"    Exit code: {result['exit_code']}")
@@ -3158,18 +3541,22 @@ def run_phase(manifest_path: str, phase_config: dict,
     # ── 5. Check for output ──
     # The agent may have written files even if exit code is non-zero.
     # Check the filesystem for the definitive success marker.
+    markers_complete = all(
+        os.path.exists(os.path.join(output_dir, marker))
+        for marker in SUCCESS_MARKERS.get(phase_name, [success_marker])
+    )
 
     if os.path.exists(error_path):
         status = "failure"
-    elif all(os.path.exists(os.path.join(output_dir, marker)) for marker in SUCCESS_MARKERS.get(phase_name, [success_marker])):
-        status = "success"
-    elif result["exit_code"] != 0:
+    elif result["exit_code"] != 0 and (phase_name in PREBUILT_SUCCESS_PHASES or not markers_complete):
         # Agent crashed without writing ERROR file — create one
         with open(error_path, 'w') as f:
             f.write(f"Agent exited with code {result['exit_code']}\n")
             if result["stderr"]:
                 f.write(f"\nStderr:\n{result['stderr'][-2000:]}\n")
         status = "failure"
+    elif markers_complete:
+        status = "success"
     else:
         # Agent exited 0 but expected artifacts may still be flushing.
         log_and_print(manifest_path, f"  → Agent exited but expected artifacts are incomplete. Polling briefly...")
@@ -3236,6 +3623,14 @@ def run_phase(manifest_path: str, phase_config: dict,
     if status == "success":
         log_and_print(manifest_path, f"  ✓ {phase_name} agent completed successfully")
         log_and_print(manifest_path, f"    Output: {success_path}")
+        append_issue_ledger_event(
+            manifest_path,
+            "phase_agent_success",
+            f"{phase_name} completed successfully.",
+            phase=phase_name,
+            attempt=attempt,
+            evidence=[success_path],
+        )
     else:
         # Read error details
         error_msg = "(no error details)"
@@ -3245,13 +3640,26 @@ def run_phase(manifest_path: str, phase_config: dict,
 
         log_and_print(manifest_path, f"  ✗ {phase_name} agent failed")
         log_and_print(manifest_path, f"    Error: {error_msg}")
-        mf.update_phase(manifest_path, phase_name, "failed",
-                        extra={"error": error_msg})
-        return False
+        return mark_phase_failure(
+            manifest_path,
+            phase_name,
+            error_msg,
+            attempt=attempt,
+            evidence=[error_path, context.get("phase_issue_report_path")],
+        )
 
     # ── 7. Approval gate ──
     if needs_approval:
         mf.update_phase(manifest_path, phase_name, "awaiting_approval")
+        update_issue_ledger_state(manifest_path, status="awaiting_approval", phase=phase_name, attempt=attempt)
+        append_issue_ledger_event(
+            manifest_path,
+            "approval_required",
+            f"{phase_name} is awaiting approval.",
+            phase=phase_name,
+            attempt=attempt,
+            evidence=[success_path],
+        )
         approval_status = request_approval(
             phase_name,
             success_path,
@@ -3261,10 +3669,37 @@ def run_phase(manifest_path: str, phase_config: dict,
 
         if approval_status == "deferred":
             log_and_print(manifest_path, f"\n  ⏸ {phase_name} awaiting approval")
+            append_issue_ledger_event(
+                manifest_path,
+                "approval_deferred",
+                f"{phase_name} approval deferred.",
+                phase=phase_name,
+                attempt=attempt,
+                evidence=[success_path],
+            )
             return True
 
         if approval_status == "aborted":
             log_and_print(manifest_path, f"\n  ✗ {phase_name} rejected by user")
+            record_issue(
+                manifest_path,
+                category="approval_rejected",
+                summary=f"{phase_name} rejected at approval gate",
+                details="Rejected by user at approval gate",
+                phase=phase_name,
+                attempt=attempt,
+                evidence=[success_path],
+                status="open",
+            )
+            append_issue_ledger_event(
+                manifest_path,
+                "approval_rejected",
+                f"{phase_name} rejected at approval gate.",
+                phase=phase_name,
+                attempt=attempt,
+                evidence=[success_path],
+            )
+            update_issue_ledger_state(manifest_path, status="failed", phase=phase_name, attempt=attempt)
             mf.update_phase(manifest_path, phase_name, "failed",
                             extra={"error": "Rejected by user at approval gate"})
             return False
@@ -3278,11 +3713,29 @@ def run_phase(manifest_path: str, phase_config: dict,
 
         mf.update_phase(manifest_path, phase_name, "approved")
         mf.update_phase(manifest_path, phase_name, "done")
+        update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
+        append_issue_ledger_event(
+            manifest_path,
+            "phase_approved",
+            f"{phase_name} approved and marked done.",
+            phase=phase_name,
+            attempt=attempt,
+            evidence=[success_path],
+        )
         log_and_print(manifest_path, f"  [manifest] {phase_name} → done")
         git_checkpoint(manifest_path, phase_name)
         return True
 
     mf.update_phase(manifest_path, phase_name, "done")
+    update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
+    append_issue_ledger_event(
+        manifest_path,
+        "phase_done",
+        f"{phase_name} marked done.",
+        phase=phase_name,
+        attempt=attempt,
+        evidence=[success_path],
+    )
     log_and_print(manifest_path, f"  [manifest] {phase_name} → done")
 
     git_checkpoint(manifest_path, phase_name)
@@ -3321,53 +3774,19 @@ def main():
         help="Stop cleanly at approval gates without waiting for stdin"
     )
     parser.add_argument(
-        "--approve", choices=[p["name"] for p in PHASES],
+        "--approve", choices=APPROVAL_PHASES,
         help="Mark a phase awaiting approval as approved, then continue"
+    )
+    parser.add_argument(
+        "--restart-phase", choices=APPROVAL_PHASES,
+        help="Reset the named phase and everything after it back to pending, then continue from there"
     )
     args = parser.parse_args()
 
     manifest_path = args.manifest
-    if args.approve:
-        if not os.path.exists(manifest_path):
-            print(f"Error: manifest not found: {manifest_path}")
-            sys.exit(1)
-
-        approved_index = next(i for i, p in enumerate(PHASES) if p["name"] == args.approve)
-        manifest_data = mf.load(manifest_path)
-
-        for earlier_phase in PHASES[:approved_index]:
-            earlier_name = earlier_phase["name"]
-            earlier_status = manifest_data["phases"].get(earlier_name, {}).get("status", "pending")
-            if earlier_status != "done":
-                mf.update_phase(manifest_path, earlier_name, "done")
-
-        if args.approve == "reiterate":
-            reiterate_output_dir = Path(get_summaries_dir(manifest_path)) / "reiterate"
-            patch_result = apply_reiterate_patch_if_present(manifest_path, str(reiterate_output_dir))
-            if patch_result.get("applied"):
-                phase_artifacts = manifest_data.get("phases", {}).get("reiterate", {}).get("artifacts", {})
-                phase_artifacts["agentsMdAppliedPatch"] = patch_result
-                mf.update_phase_artifacts(manifest_path, "reiterate", phase_artifacts)
-
-        mf.update_phase(manifest_path, args.approve, "approved")
-        mf.update_phase(manifest_path, args.approve, "done")
-
-        for later_phase in PHASES[approved_index + 1:]:
-            later_name = later_phase["name"]
-            later_status = manifest_data["phases"].get(later_name, {}).get("status", "pending")
-            if later_status == "awaiting_approval":
-                break
-            if later_status in {"in_progress", "approved", "failed"}:
-                mf.update_phase(manifest_path, later_name, "pending")
-
-        print(f"Approved phase: {args.approve}")
-
-    os.environ["MIGRATION_MANIFEST_PATH"] = manifest_path
-    if args.approve:
-        phase_index = next(i for i, p in enumerate(PHASES) if p["name"] == args.approve)
-        phase_configs = PHASES[phase_index + 1:]
-    else:
-        phase_configs = None
+    if args.approve and args.restart_phase:
+        print("Error: --approve and --restart-phase cannot be used together.")
+        sys.exit(1)
 
     # ── Validate manifest ──
     if not os.path.exists(manifest_path):
@@ -3375,8 +3794,45 @@ def main():
         print(f"Run /migrate first, or create the manifest manually.")
         sys.exit(1)
 
+    os.environ["MIGRATION_MANIFEST_PATH"] = manifest_path
     manifest_data = mf.load(manifest_path)
+    initialize_run_control(manifest_path, manifest_data)
+    manifest_data, phase_repair = reconcile_manifest_phase_set(manifest_path)
+    if phase_repair:
+        repair_summary = (
+            f"Manifest phase set repaired. Missing={phase_repair['missing']} "
+            f"Unexpected={phase_repair['unexpected']}"
+        )
+        log_event(manifest_path, repair_summary)
+        append_issue_ledger_event(
+            manifest_path,
+            "manifest_phase_repaired",
+            repair_summary,
+            evidence=[manifest_path],
+        )
+        record_issue(
+            manifest_path,
+            category="manifest_phase_alignment",
+            summary="Manifest phase set was repaired to match the selected framework.",
+            details=repair_summary,
+            evidence=[manifest_path],
+            status="resolved",
+        )
+        manifest_data = mf.load(manifest_path)
+
+    maybe_update_phase_index(manifest_data)
+    maybe_raise_manifest_alignment(manifest_data)
     log_event(manifest_path, f"orchestrator_start manifest={manifest_path} runtime={args.runtime or 'auto-detect'} non_interactive={args.non_interactive} approve={args.approve or ''}")
+    append_issue_ledger_event(
+        manifest_path,
+        "run_started",
+        f"Orchestrator started with runtime={args.runtime or 'auto-detect'} non_interactive={args.non_interactive}.",
+        evidence=[manifest_path, str(get_issue_ledger_paths(manifest_path)[0])],
+    )
+    update_issue_ledger_state(
+        manifest_path,
+        status=manifest_data.get("meta", {}).get("status", "pending"),
+    )
 
     # ── Print banner ──
     meta = manifest_data["meta"]
@@ -3390,20 +3846,97 @@ def main():
         print(f"  Rules:    {len(meta['nonNegotiables'])} non-negotiables")
     print()
 
+    phase_set = get_phase_set(manifest_data)
+    phase_names = [phase["name"] for phase in phase_set]
+
+    if args.restart_phase:
+        if args.restart_phase not in phase_names:
+            print(f"Error: phase '{args.restart_phase}' is not valid for framework {meta.get('frameworkVersion', 'tier-1')}.")
+            print(f"Available: {phase_names}")
+            sys.exit(1)
+        manifest_data = restart_from_phase(manifest_path, manifest_data, args.restart_phase)
+        append_issue_ledger_event(
+            manifest_path,
+            "phase_restart_requested",
+            f"Restart requested from {args.restart_phase}.",
+            phase=args.restart_phase,
+            evidence=[manifest_path],
+        )
+        phase_set = get_phase_set(manifest_data)
+        phase_names = [phase["name"] for phase in phase_set]
+        restart_index = get_phase_resume_index(phase_set, args.restart_phase)
+        phase_configs = phase_set[restart_index:]
+    else:
+        phase_configs = None
+
+    if args.approve:
+        if args.approve not in phase_names:
+            print(f"Error: phase '{args.approve}' is not valid for framework {meta.get('frameworkVersion', 'tier-1')}.")
+            print(f"Available: {phase_names}")
+            sys.exit(1)
+
+        approved_index = get_phase_resume_index(phase_set, args.approve)
+
+        for earlier_phase in phase_set[:approved_index]:
+            earlier_name = earlier_phase["name"]
+            earlier_status = manifest_data["phases"].get(earlier_name, {}).get("status", "pending")
+            if earlier_status != "done":
+                mf.update_phase(manifest_path, earlier_name, "done")
+
+        if args.approve == "reiterate":
+            reiterate_output_dir = Path(get_phase_output_dir_from_manifest(manifest_path, "reiterate"))
+            patch_result = apply_reiterate_patch_if_present(manifest_path, str(reiterate_output_dir))
+            if patch_result.get("applied"):
+                phase_artifacts = manifest_data.get("phases", {}).get("reiterate", {}).get("artifacts", {})
+                phase_artifacts["agentsMdAppliedPatch"] = patch_result
+                mf.update_phase_artifacts(manifest_path, "reiterate", phase_artifacts)
+
+        mf.update_phase(manifest_path, args.approve, "approved")
+        mf.update_phase(manifest_path, args.approve, "done")
+        append_issue_ledger_event(
+            manifest_path,
+            "approval_applied",
+            f"{args.approve} approved from CLI resume.",
+            phase=args.approve,
+            evidence=[manifest_path],
+        )
+
+        manifest_data = mf.load(manifest_path)
+        phase_set = get_phase_set(manifest_data)
+
+        for later_phase in phase_set[approved_index + 1:]:
+            later_name = later_phase["name"]
+            later_status = manifest_data["phases"].get(later_name, {}).get("status", "pending")
+            if later_status == "awaiting_approval":
+                break
+            if later_status in {"in_progress", "approved", "failed"}:
+                mf.update_phase(manifest_path, later_name, "pending")
+
+        print(f"Approved phase: {args.approve}")
+        manifest_data = mf.load(manifest_path)
+        phase_set = get_phase_set(manifest_data)
+        phase_configs = phase_set[approved_index + 1:]
+
     # ── Determine which phases to run ──
     if phase_configs is None:
         if args.phase:
-            phase_configs = [p for p in PHASES if p["name"] == args.phase]
+            phase_configs = [p for p in phase_set if p["name"] == args.phase]
             if not phase_configs:
                 print(f"Error: unknown phase '{args.phase}'. "
-                      f"Available: {[p['name'] for p in PHASES]}")
+                      f"Available: {[p['name'] for p in phase_set]}")
                 sys.exit(1)
         else:
-            phase_configs = PHASES
+            phase_configs = phase_set
 
     if not phase_configs:
         banner("MIGRATION COMPLETE", char="✓")
         print("\n  No remaining phases to run.\n")
+        append_issue_ledger_event(
+            manifest_path,
+            "run_noop",
+            "No remaining phases to run.",
+            evidence=[manifest_path],
+        )
         sys.exit(0)
 
     # ── Run phases ──
@@ -3414,6 +3947,13 @@ def main():
         current_status = mf.get_phase_status(manifest_path, phase_name)
         if current_status == "done":
             print(f"\n  → {phase_name}: already done, skipping")
+            append_issue_ledger_event(
+                manifest_path,
+                "phase_already_done",
+                f"{phase_name} already done; skipped.",
+                phase=phase_name,
+                evidence=[manifest_path],
+            )
             continue
 
         # Run the phase
@@ -3421,13 +3961,27 @@ def main():
         success = False
 
         while retries <= MAX_RETRIES and not success:
+            attempt = retries + 1
             if retries > 0:
                 print(f"\n  → Retry {retries}/{MAX_RETRIES} for {phase_name}...")
                 # Clean up error marker from previous attempt
-                sd = get_summaries_dir(manifest_path)
-                error_path = f"{sd}/{phase_name}/ERROR"
+                error_path = get_phase_retry_path(manifest_path, phase_name)
                 if os.path.exists(error_path):
                     os.remove(error_path)
+                append_issue_ledger_event(
+                    manifest_path,
+                    "phase_retry",
+                    f"Retrying {phase_name}.",
+                    phase=phase_name,
+                    attempt=attempt,
+                    evidence=[error_path, manifest_path],
+                )
+                update_issue_ledger_state(
+                    manifest_path,
+                    status="in_progress",
+                    phase=phase_name,
+                    attempt=attempt,
+                )
 
             success = run_phase(
                 manifest_path=manifest_path,
@@ -3436,12 +3990,21 @@ def main():
                 model=args.model,
                 skip_approval=args.skip_approval,
                 non_interactive=args.non_interactive,
+                attempt=attempt,
             )
 
             if not success:
                 retries += 1
                 if retries <= MAX_RETRIES:
                     if args.non_interactive:
+                        append_issue_ledger_event(
+                            manifest_path,
+                            "retry_skipped_non_interactive",
+                            f"{phase_name} failed and non-interactive mode stopped further retries.",
+                            phase=phase_name,
+                            attempt=attempt,
+                            evidence=[manifest_path],
+                        )
                         break
                     try:
                         retry = input(f"\n  {phase_name} failed. Retry? [y/n] → ").strip().lower()
@@ -3454,10 +4017,17 @@ def main():
         if current_status == "awaiting_approval":
             banner(f"MIGRATION PAUSED AT: {phase_name}", char="⏸")
             print(f"\n  The migration is waiting for your review and approval.")
-            print(f"  Summary: {get_summaries_dir(manifest_path)}/{phase_name}/{phase_config['success_marker']}")
+            print(f"  Summary: {get_summary_output_path(manifest_path, phase_config)}")
             print(f"  Approve and continue later with:")
             print(f"    python {__file__} {manifest_path} --approve {phase_name}")
             print()
+            append_issue_ledger_event(
+                manifest_path,
+                "run_paused_for_approval",
+                f"Run paused at {phase_name} awaiting approval.",
+                phase=phase_name,
+                evidence=[get_summary_output_path(manifest_path, phase_config)],
+            )
             sys.exit(0)
 
         if not success:
@@ -3465,18 +4035,42 @@ def main():
             print(f"\n  The migration stopped at the {phase_name} phase.")
             print(f"  To resume, re-run: python {__file__} {manifest_path}")
             print(f"  Completed phases will be skipped automatically.\n")
+            update_issue_ledger_state(manifest_path, status="failed", phase=phase_name, attempt=attempt)
+            append_issue_ledger_event(
+                manifest_path,
+                "run_stopped",
+                f"Run stopped at {phase_name}.",
+                phase=phase_name,
+                attempt=attempt,
+                evidence=[manifest_path, str(get_issue_ledger_paths(manifest_path)[0])],
+            )
             sys.exit(1)
 
     # ── All phases complete ──
-    mf.load(manifest_path)  # Refresh
+    manifest_data = mf.load(manifest_path)
     sd = get_summaries_dir(manifest_path)
+    ledger = load_issue_ledger(manifest_path, manifest_data)
+    ledger["status"] = manifest_data.get("meta", {}).get("status", "complete")
+    ledger["currentPhase"] = None
+    ledger["currentAttempt"] = None
+    ledger["events"].append(
+        {
+            "timestamp": utc_timestamp(),
+            "type": "run_complete",
+            "phase": None,
+            "attempt": None,
+            "message": "All phases completed successfully.",
+            "evidence": [manifest_path],
+        }
+    )
+    save_issue_ledger(manifest_path, ledger)
     banner("MIGRATION COMPLETE", char="✓")
     print(f"\n  All phases completed successfully.")
     print(f"  Review the final state:")
     print(f"    Manifest:  {manifest_path}")
-    print(f"    Discovery: {sd}/discovery/DISCOVERY.md")
-    print(f"    Plan:      {sd}/planning/PLAN.md")
-    print(f"    Review:    {sd}/review/REVIEW.md")
+    for path in get_default_complete_paths(sd, manifest_data):
+        print(f"    Output:    {path}")
+    print(f"    Ledger:    {get_issue_ledger_paths(manifest_path)[0]}")
     print()
 
 

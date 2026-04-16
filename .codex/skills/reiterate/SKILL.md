@@ -30,6 +30,14 @@ Read from your context variables:
 
 Read `review-results.json` first.
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the shared source of truth for failure history. If you cannot safely fix a repeated pattern, record the reason in `{phase_issue_report_path}` instead of inventing a confident-looking patch.
+
 ## Your Task
 
 ### Step 1: Read Failure Context

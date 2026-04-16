@@ -24,6 +24,14 @@ Read from context:
 - `domain_execution_overview_path`
 - `target_path`
 
+## Run Control
+
+When present in context, use:
+- `issue_ledger_path`
+- `phase_issue_report_path`
+
+Use the ledger as the run-level source of truth for unsafe or ambiguous rewrites. If rewiring is blocked, record the evidence in `{phase_issue_report_path}` before writing `{output_dir}/ERROR`.
+
 ## Task
 
 1. Review the deterministic rewiring aggregation.

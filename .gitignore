@@ -201,6 +201,12 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local Codex runtime state
+.codex-home/
+
+# Generated local migration imports and run artifacts
+experiments/imported-sources/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
