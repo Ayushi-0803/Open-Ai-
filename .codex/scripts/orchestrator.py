@@ -2271,8 +2271,24 @@ PHASES = TIER1_PHASES
 # How many times to retry a failed phase
 MAX_RETRIES = 2
 
-# Agent timeout in seconds (30 minutes default)
-AGENT_TIMEOUT = int(os.environ.get("MIGRATION_TIMEOUT", "1800"))
+# Agent timeout in seconds. Defaults aggressively trimmed: prebuilders already
+# produced valid artifacts, codex only "refines" them. 5 min cap beats infinity.
+DEFAULT_AGENT_TIMEOUT = int(os.environ.get("MIGRATION_TIMEOUT", "300"))
+PHASE_TIMEOUT_DEFAULTS = {
+    "domain_execution": int(os.environ.get("MIGRATION_TIMEOUT_DOMAIN_EXECUTION", "900")),
+    "rewiring":         int(os.environ.get("MIGRATION_TIMEOUT_REWIRING", "360")),
+    "integration_review": int(os.environ.get("MIGRATION_TIMEOUT_INTEGRATION_REVIEW", "360")),
+}
+
+# Fast mode: env override wins; CLI --fast sets it too.
+FAST_MODE_DEFAULT = os.environ.get("MIGRATION_FAST", "").lower() in {"1", "true", "yes", "on"}
+
+# Phases that can be fully skipped in fast mode when prebuilt markers exist.
+FAST_MODE_SKIPPABLE_PHASES = {
+    "foundation", "module_discovery", "domain_discovery",
+    "conflict_resolution", "domain_planning", "rewiring",
+    "integration_review",
+}
 
 # Polling interval in seconds
 POLL_INTERVAL = int(os.environ.get("MIGRATION_POLL_INTERVAL", "15"))
@@ -2293,6 +2309,21 @@ RECIPE_VERIFY_RUNNER = FRAMEWORK_DIR / "scripts" / "recipe_verify_runner.py"
 ARTIFACT_VALIDATOR = FRAMEWORK_DIR / "scripts" / "validate_artifacts.py"
 DEFAULT_EXECUTION_WORKERS = int(os.environ.get("MIGRATION_EXECUTION_WORKERS", "3"))
 MAX_BATCH_WORKERS = max(1, DEFAULT_EXECUTION_WORKERS)
+
+
+def get_agent_timeout_seconds(phase_name: str) -> int:
+    env_key = f"MIGRATION_TIMEOUT_{phase_name.upper()}"
+    raw = os.environ.get(env_key)
+    if raw is None and phase_name in PHASE_TIMEOUT_DEFAULTS:
+        raw = os.environ.get("MIGRATION_TIMEOUT_LONG_PHASES") or str(PHASE_TIMEOUT_DEFAULTS[phase_name])
+    fallback = int(os.environ.get("MIGRATION_TIMEOUT", str(DEFAULT_AGENT_TIMEOUT)))
+    if raw is None:
+        return fallback
+    try:
+        value = int(raw)
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
 
 PLANNING_ARTIFACT_CONTRACTS = [
     {"name": "AGENTS.md", "purpose": "Transformation rules for execution workers"},
@@ -2372,6 +2403,7 @@ def build_issue_ledger(manifest_path: str, manifest_data: dict | None = None) ->
         "status": meta.get("status", "pending"),
         "currentPhase": None,
         "currentAttempt": None,
+        "progress": build_progress_snapshot(manifest_data),
         "issues": [],
         "events": [],
         "lastUpdatedAt": utc_timestamp(),
@@ -2379,6 +2411,12 @@ def build_issue_ledger(manifest_path: str, manifest_data: dict | None = None) ->
 
 
 def render_issue_ledger_markdown(ledger: dict) -> str:
+    progress = ledger.get("progress", {})
+    progress_bar = progress.get("bar", "[]")
+    progress_done = progress.get("completedPhases", 0)
+    progress_total = progress.get("totalPhases", 0)
+    progress_percent = progress.get("percent", 0)
+    progress_summary = progress.get("summary", "pending")
     lines = [
         "# Issue Ledger",
         "",
@@ -2392,6 +2430,8 @@ def render_issue_ledger_markdown(ledger: dict) -> str:
         f"- Framework: `{ledger.get('frameworkVersion', 'tier-1')}`",
         f"- Current phase: `{ledger.get('currentPhase') or 'none'}`",
         f"- Current attempt: `{ledger.get('currentAttempt') or 0}`",
+        f"- Progress: `{progress_bar} {progress_done}/{progress_total} done ({progress_percent}%)`",
+        f"- Progress state: `{progress_summary}`",
         f"- Manifest: `{ledger.get('manifestPath', '')}`",
         "",
         "## Open Issues",
@@ -2443,20 +2483,22 @@ def render_issue_ledger_markdown(ledger: dict) -> str:
 
 
 def load_issue_ledger(manifest_path: str, manifest_data: dict | None = None) -> dict:
+    manifest_snapshot = manifest_data or mf.load(manifest_path)
     markdown_path, json_path = get_issue_ledger_paths(manifest_path)
     if json_path.exists():
         try:
             ledger = json.loads(json_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            ledger = build_issue_ledger(manifest_path, manifest_data)
+            ledger = build_issue_ledger(manifest_path, manifest_snapshot)
     else:
-        ledger = build_issue_ledger(manifest_path, manifest_data)
+        ledger = build_issue_ledger(manifest_path, manifest_snapshot)
 
     ledger.setdefault("issues", [])
     ledger.setdefault("events", [])
-    ledger.setdefault("status", (manifest_data or mf.load(manifest_path)).get("meta", {}).get("status", "pending"))
+    ledger.setdefault("status", manifest_snapshot.get("meta", {}).get("status", "pending"))
     ledger.setdefault("currentPhase", None)
     ledger.setdefault("currentAttempt", None)
+    ledger["progress"] = build_progress_snapshot(manifest_snapshot)
     ledger["lastUpdatedAt"] = utc_timestamp()
     markdown_path.parent.mkdir(parents=True, exist_ok=True)
     return ledger
@@ -2595,7 +2637,8 @@ def mark_phase_failure(
         status="open",
     )
     update_issue_ledger_state(manifest_path, status="failed", phase=phase_name, attempt=attempt)
-    mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+    manifest_data = mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+    log_progress(manifest_path, manifest_data=manifest_data)
     return False
 
 
@@ -2649,6 +2692,154 @@ def phase_header(phase_name: str, status: str = "starting"):
     print(f"\n{'─' * 64}")
     print(f"  Phase: {phase_name.upper()}  [{status}]")
     print(f"{'─' * 64}")
+
+
+PHASE_STATUS_SYMBOLS = {
+    "done": "#",
+    "approved": "#",
+    "in_progress": ">",
+    "awaiting_approval": "!",
+    "failed": "x",
+    "pending": ".",
+}
+
+PHASE_STATUS_LABELS = {
+    "done": "done",
+    "approved": "approved",
+    "in_progress": "in progress",
+    "awaiting_approval": "awaiting approval",
+    "failed": "failed",
+    "pending": "pending",
+    "complete": "complete",
+}
+
+# Rich progress bar glyphs (block cells). Falls back to ASCII if NO_COLOR/MIGRATION_ASCII set.
+_ASCII_BAR = bool(os.environ.get("NO_COLOR") or os.environ.get("MIGRATION_ASCII"))
+PHASE_STATUS_GLYPHS = {
+    "done":               ("█", "\033[32m"),
+    "approved":           ("█", "\033[32m"),
+    "in_progress":        ("▓", "\033[33m"),
+    "awaiting_approval":  ("▒", "\033[35m"),
+    "failed":             ("✗", "\033[31m"),
+    "pending":            ("░", "\033[90m"),
+}
+_RESET = "\033[0m"
+
+
+def _render_bar_cells(phase_states: dict, phase_names: list[str]) -> str:
+    """Build a colorized block-char bar for the manifest phases."""
+    cells = []
+    for name in phase_names:
+        status = phase_states.get(name, {}).get("status", "pending")
+        if _ASCII_BAR:
+            cells.append(PHASE_STATUS_SYMBOLS.get(status, "?"))
+        else:
+            glyph, color = PHASE_STATUS_GLYPHS.get(status, ("?", ""))
+            cells.append(f"{color}{glyph}{_RESET}" if color else glyph)
+    if _ASCII_BAR:
+        return f"[{''.join(cells)}]"
+    return f"│{''.join(cells)}│"
+
+
+def render_status_banner(manifest_data: dict) -> str:
+    """Multi-line visual status card for end-of-phase / run completion."""
+    snapshot = build_progress_snapshot(manifest_data)
+    phase_names = get_phase_names(manifest_data)
+    phase_states = manifest_data.get("phases", {})
+    lines = []
+    width = max(64, len(phase_names) * 4 + 20)
+    title = f" MIGRATION PROGRESS — {snapshot['percent']}% "
+    lines.append("╭" + "─" * (width - 2) + "╮")
+    lines.append("│" + title.center(width - 2) + "│")
+    lines.append("├" + "─" * (width - 2) + "┤")
+    filled = int((snapshot["percent"] / 100) * (width - 10))
+    track = "█" * filled + "░" * (width - 10 - filled)
+    lines.append(f"│  {track}  │")
+    lines.append("├" + "─" * (width - 2) + "┤")
+    for idx, name in enumerate(phase_names, start=1):
+        status = phase_states.get(name, {}).get("status", "pending")
+        glyph, color = PHASE_STATUS_GLYPHS.get(status, ("?", ""))
+        label = PHASE_STATUS_LABELS.get(status, status)
+        if _ASCII_BAR:
+            row = f"  {idx:>2}. [{PHASE_STATUS_SYMBOLS.get(status,'?')}] {name:<22} {label}"
+        else:
+            row = f"  {idx:>2}. {color}{glyph}{_RESET} {name:<22} {color}{label}{_RESET}"
+        pad = width - 2 - _visual_len(row)
+        lines.append("│" + row + " " * max(0, pad) + "│")
+    lines.append("╰" + "─" * (width - 2) + "╯")
+    return "\n".join(lines)
+
+
+def _visual_len(text: str) -> int:
+    """Count visible characters, ignoring ANSI escape sequences."""
+    import re
+    return len(re.sub(r"\033\[[0-9;]*m", "", text))
+
+
+def build_progress_snapshot(manifest_data: dict) -> dict:
+    phase_names = get_phase_names(manifest_data)
+    phase_states = manifest_data.get("phases", {})
+    total_phases = len(phase_names)
+    completed_phases = 0
+    current_phase = None
+    current_status = None
+
+    for phase_name in phase_names:
+        status = phase_states.get(phase_name, {}).get("status", "pending")
+        if status == "done":
+            completed_phases += 1
+        if current_phase is None and status in {"in_progress", "awaiting_approval", "failed", "approved"}:
+            current_phase = phase_name
+            current_status = status
+
+    if current_phase is None:
+        if completed_phases == total_phases:
+            current_status = "complete"
+        else:
+            next_pending = next(
+                (
+                    phase_name
+                    for phase_name in phase_names
+                    if phase_states.get(phase_name, {}).get("status", "pending") == "pending"
+                ),
+                None,
+            )
+            current_phase = next_pending
+            current_status = "pending" if next_pending else None
+
+    current_index = phase_names.index(current_phase) + 1 if current_phase in phase_names else None
+    percent = 100 if total_phases == 0 else int((completed_phases / total_phases) * 100)
+    summary = PHASE_STATUS_LABELS.get(current_status, "pending")
+    if current_phase and current_status != "complete":
+        if current_index is not None:
+            summary = f"{summary}: {current_phase} ({current_index}/{total_phases})"
+        else:
+            summary = f"{summary}: {current_phase}"
+
+    return {
+        "bar": _render_bar_cells(phase_states, phase_names),
+        "completedPhases": completed_phases,
+        "totalPhases": total_phases,
+        "percent": percent,
+        "currentPhase": current_phase,
+        "currentStatus": current_status,
+        "currentIndex": current_index,
+        "summary": summary,
+    }
+
+
+def render_progress_line(manifest_data: dict, prefix: str = "  Progress: ") -> str:
+    snapshot = build_progress_snapshot(manifest_data)
+    return (
+        f"{prefix}{snapshot['bar']} "
+        f"{snapshot['completedPhases']}/{snapshot['totalPhases']} done "
+        f"({snapshot['percent']}%) | {snapshot['summary']}"
+    )
+
+
+def log_progress(manifest_path: str, *, prefix: str = "  Progress: ", manifest_data: dict | None = None):
+    snapshot = manifest_data or mf.load(manifest_path)
+    log_and_print(manifest_path, render_progress_line(snapshot, prefix=prefix))
 
 
 def show_summary(filepath: str, max_lines: int = 40):
@@ -3213,7 +3404,8 @@ def run_phase(manifest_path: str, phase_config: dict,
               runtime: str = None, model: str = None,
               skip_approval: bool = False,
               non_interactive: bool = False,
-              attempt: int = 1) -> bool:
+              attempt: int = 1,
+              fast_mode: bool = False) -> bool:
     """
     Run a single migration phase:
       1. Create output directory
@@ -3462,8 +3654,9 @@ def run_phase(manifest_path: str, phase_config: dict,
             )
 
     # ── 1. Update manifest: starting ──
-    mf.update_phase(manifest_path, phase_name, "in_progress")
+    manifest_data = mf.update_phase(manifest_path, phase_name, "in_progress")
     log_and_print(manifest_path, f"  [manifest] {phase_name} → in_progress")
+    log_progress(manifest_path, manifest_data=manifest_data)
     append_issue_ledger_event(
         manifest_path,
         "phase_manifest_in_progress",
@@ -3472,6 +3665,43 @@ def run_phase(manifest_path: str, phase_config: dict,
         attempt=attempt,
         evidence=[manifest_path],
     )
+
+    # ── 1a. Fast mode short-circuit ──
+    # Prebuilders already wrote valid artifacts. If --fast and markers present
+    # and validation passes, skip the codex refinement agent entirely.
+    if fast_mode and phase_name in FAST_MODE_SKIPPABLE_PHASES:
+        fast_markers_ok = all(
+            os.path.exists(os.path.join(output_dir, marker))
+            for marker in SUCCESS_MARKERS.get(phase_name, [success_marker])
+        )
+        if fast_markers_ok:
+            fast_validation = validate_phase_artifacts(manifest_path, phase_name, output_dir)
+            if fast_validation["passed"]:
+                log_and_print(
+                    manifest_path,
+                    f"  ⚡ fast mode: prebuilt artifacts valid — skipping codex agent for {phase_name}",
+                )
+                phase_artifacts = collect_phase_artifacts(phase_name, output_dir)
+                phase_artifacts["validation"] = fast_validation
+                phase_artifacts["fastMode"] = True
+                mf.update_phase_artifacts(manifest_path, phase_name, phase_artifacts)
+                success_path = os.path.join(
+                    output_dir,
+                    SUCCESS_MARKERS.get(phase_name, [success_marker])[0],
+                )
+                append_issue_ledger_event(
+                    manifest_path,
+                    "phase_fast_skip",
+                    f"{phase_name} completed via fast mode (agent skipped).",
+                    phase=phase_name,
+                    attempt=attempt,
+                    evidence=[success_path],
+                )
+                # In fast mode, skip approval gates for deterministic phases.
+                manifest_data = mf.update_phase(manifest_path, phase_name, "done")
+                log_progress(manifest_path, manifest_data=manifest_data)
+                git_checkpoint(manifest_path, phase_name)
+                return True
 
     # ── 2. Build context for this phase ──
     context["allowed_tools"] = phase_config.get("allowed_tools", "Read,Write,Edit,Bash,Glob,Grep")
@@ -3497,10 +3727,13 @@ def run_phase(manifest_path: str, phase_config: dict,
     log_and_print(manifest_path, f"    Skill:   {skill_path}")
     log_and_print(manifest_path, f"    Output:  {output_dir}")
     log_and_print(manifest_path, f"    Runtime: {runtime or 'auto-detect'}")
+    agent_timeout = get_agent_timeout_seconds(phase_name)
+    log_and_print(manifest_path, f"    Timeout: {agent_timeout}s")
 
     def _heartbeat_callback(elapsed_seconds: int):
         message = f"{phase_name} agent still running after {elapsed_seconds}s."
         log_and_print(manifest_path, f"    [heartbeat] {message}")
+        log_progress(manifest_path, prefix="    [progress] ")
         append_issue_ledger_event(
             manifest_path,
             "phase_heartbeat",
@@ -3515,7 +3748,7 @@ def run_phase(manifest_path: str, phase_config: dict,
         context=context,
         runtime=runtime,
         model=model,
-        timeout=AGENT_TIMEOUT,
+        timeout=agent_timeout,
         on_heartbeat=_heartbeat_callback,
     )
 
@@ -3642,8 +3875,9 @@ def run_phase(manifest_path: str, phase_config: dict,
 
     # ── 7. Approval gate ──
     if needs_approval:
-        mf.update_phase(manifest_path, phase_name, "awaiting_approval")
+        manifest_data = mf.update_phase(manifest_path, phase_name, "awaiting_approval")
         update_issue_ledger_state(manifest_path, status="awaiting_approval", phase=phase_name, attempt=attempt)
+        log_progress(manifest_path, manifest_data=manifest_data)
         append_issue_ledger_event(
             manifest_path,
             "approval_required",
@@ -3704,7 +3938,7 @@ def run_phase(manifest_path: str, phase_config: dict,
                 mf.update_phase_artifacts(manifest_path, phase_name, phase_artifacts)
 
         mf.update_phase(manifest_path, phase_name, "approved")
-        mf.update_phase(manifest_path, phase_name, "done")
+        manifest_data = mf.update_phase(manifest_path, phase_name, "done")
         update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
         append_issue_ledger_event(
             manifest_path,
@@ -3715,10 +3949,11 @@ def run_phase(manifest_path: str, phase_config: dict,
             evidence=[success_path],
         )
         log_and_print(manifest_path, f"  [manifest] {phase_name} → done")
+        log_progress(manifest_path, manifest_data=manifest_data)
         git_checkpoint(manifest_path, phase_name)
         return True
 
-    mf.update_phase(manifest_path, phase_name, "done")
+    manifest_data = mf.update_phase(manifest_path, phase_name, "done")
     update_issue_ledger_state(manifest_path, status="in_progress", phase=phase_name, attempt=attempt)
     append_issue_ledger_event(
         manifest_path,
@@ -3729,6 +3964,7 @@ def run_phase(manifest_path: str, phase_config: dict,
         evidence=[success_path],
     )
     log_and_print(manifest_path, f"  [manifest] {phase_name} → done")
+    log_progress(manifest_path, manifest_data=manifest_data)
 
     git_checkpoint(manifest_path, phase_name)
 
@@ -3773,7 +4009,24 @@ def main():
         "--restart-phase", choices=APPROVAL_PHASES,
         help="Reset the named phase and everything after it back to pending, then continue from there"
     )
+    parser.add_argument(
+        "--fast", action="store_true", default=FAST_MODE_DEFAULT,
+        help="Fast mode: skip codex refinement when deterministic prebuilders produce valid artifacts"
+    )
+    parser.add_argument(
+        "--agent-timeout", type=int, default=None,
+        help="Override per-agent timeout in seconds (applies to all phases; fast mode still honors phase defaults)"
+    )
+    parser.add_argument(
+        "--parallel-domains", type=int, default=None,
+        help="Max concurrent domain workers during domain_execution (default: 4)"
+    )
     args = parser.parse_args()
+
+    if args.agent_timeout and args.agent_timeout > 0:
+        os.environ["MIGRATION_TIMEOUT"] = str(args.agent_timeout)
+    if args.parallel_domains and args.parallel_domains > 0:
+        os.environ["MIGRATION_PARALLEL_DOMAINS"] = str(args.parallel_domains)
 
     manifest_path = args.manifest
     if args.approve and args.restart_phase:
@@ -3834,8 +4087,13 @@ def main():
     print(f"  Target:   {meta.get('targetDescription', meta.get('targetPath', '?'))}")
     print(f"  Tier:     {meta.get('tier', 'medium')}")
     print(f"  Runtime:  {args.runtime or 'auto-detect'}")
+    if args.fast:
+        print(f"  Mode:     ⚡ FAST (codex refinement skipped for deterministic phases)")
     if meta.get("nonNegotiables"):
         print(f"  Rules:    {len(meta['nonNegotiables'])} non-negotiables")
+    print(render_progress_line(manifest_data))
+    print()
+    print(render_status_banner(manifest_data))
     print()
 
     phase_set = get_phase_set(manifest_data)
@@ -3905,6 +4163,7 @@ def main():
                 mf.update_phase(manifest_path, later_name, "pending")
 
         print(f"Approved phase: {args.approve}")
+        print(render_progress_line(mf.load(manifest_path)))
         manifest_data = mf.load(manifest_path)
         phase_set = get_phase_set(manifest_data)
         phase_configs = phase_set[approved_index + 1:]
@@ -3922,6 +4181,7 @@ def main():
 
     if not phase_configs:
         banner("MIGRATION COMPLETE", char="✓")
+        print(render_progress_line(mf.load(manifest_path)))
         print("\n  No remaining phases to run.\n")
         append_issue_ledger_event(
             manifest_path,
@@ -3932,6 +4192,22 @@ def main():
         sys.exit(0)
 
     # ── Run phases ──
+    # Fast mode also drops `reiterate` entirely (prebuilders already write valid
+    # artifacts — reiterate just re-reads them).
+    if args.fast:
+        fast_drop = {"reiterate"}
+        original_count = len(phase_configs)
+        phase_configs = [p for p in phase_configs if p["name"] not in fast_drop]
+        dropped = original_count - len(phase_configs)
+        if dropped:
+            print(f"  ⚡ fast mode: skipping {dropped} redundant phase(s): {sorted(fast_drop)}")
+            for dropped_name in fast_drop:
+                if dropped_name in {p["name"] for p in phase_set}:
+                    cur = mf.get_phase_status(manifest_path, dropped_name)
+                    if cur != "done":
+                        mf.update_phase(manifest_path, dropped_name, "done",
+                                        extra={"skipped": True, "reason": "fast mode"})
+
     for phase_config in phase_configs:
         phase_name = phase_config["name"]
 
@@ -3983,6 +4259,7 @@ def main():
                 skip_approval=args.skip_approval,
                 non_interactive=args.non_interactive,
                 attempt=attempt,
+                fast_mode=args.fast,
             )
 
             if not success:
@@ -4008,6 +4285,7 @@ def main():
         current_status = mf.get_phase_status(manifest_path, phase_name)
         if current_status == "awaiting_approval":
             banner(f"MIGRATION PAUSED AT: {phase_name}", char="⏸")
+            print(render_progress_line(mf.load(manifest_path)))
             print(f"\n  The migration is waiting for your review and approval.")
             print(f"  Summary: {get_summary_output_path(manifest_path, phase_config)}")
             print(f"  Approve and continue later with:")
@@ -4024,6 +4302,7 @@ def main():
 
         if not success:
             banner(f"MIGRATION STOPPED AT: {phase_name}", char="✗")
+            print(render_progress_line(mf.load(manifest_path)))
             print(f"\n  The migration stopped at the {phase_name} phase.")
             print(f"  To resume, re-run: python {__file__} {manifest_path}")
             print(f"  Completed phases will be skipped automatically.\n")
@@ -4057,6 +4336,9 @@ def main():
     )
     save_issue_ledger(manifest_path, ledger)
     banner("MIGRATION COMPLETE", char="✓")
+    print(render_progress_line(manifest_data))
+    print()
+    print(render_status_banner(manifest_data))
     print(f"\n  All phases completed successfully.")
     print(f"  Review the final state:")
     print(f"    Manifest:  {manifest_path}")

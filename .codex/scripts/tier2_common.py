@@ -240,11 +240,15 @@ def infer_target_candidate_paths(source_rel_path: str) -> list[str]:
     candidates = [source_rel_path]
     parts = list(source.parts)
     if parts:
-        candidates.append(str(Path(*parts[1:])))
+        remainder = Path(*parts[1:])
+        if str(remainder) not in {"", "."}:
+            candidates.append(str(remainder))
     if source.suffix == ".py":
         candidates.append(source_rel_path.replace(".py", ".ts"))
         if parts:
-            candidates.append(str(Path(*parts[1:])).replace(".py", ".ts"))
+            remainder = Path(*parts[1:])
+            if str(remainder) not in {"", "."}:
+                candidates.append(str(remainder).replace(".py", ".ts"))
     deduped: list[str] = []
     seen: set[str] = set()
     for candidate in candidates:
@@ -259,6 +263,6 @@ def resolve_existing_target_file(target_root: Path, candidates: list[str]) -> st
         if not candidate:
             continue
         path = target_root / candidate
-        if path.exists():
+        if path.exists() and path.is_file():
             return str(path.resolve())
     return None

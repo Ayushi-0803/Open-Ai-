@@ -83,7 +83,11 @@ def test_initialize_run_control_creates_issue_ledger_files(tmp_path):
     ledger = json.loads(json_path.read_text(encoding="utf-8"))
     assert ledger["manifestPath"] == str(manifest_path.resolve())
     assert ledger["frameworkVersion"] == "tier-1"
+    assert ledger["progress"]["bar"] == "[.....]"
+    assert ledger["progress"]["completedPhases"] == 0
+    assert ledger["progress"]["totalPhases"] == 5
     assert "Issue Ledger" in markdown_path.read_text(encoding="utf-8")
+    assert "Progress" in markdown_path.read_text(encoding="utf-8")
 
 
 def test_build_context_includes_run_control_paths(tmp_path):
@@ -159,3 +163,65 @@ def test_restart_from_phase_resets_selected_and_later_phases(tmp_path):
     assert restarted["phases"]["domain_discovery"]["status"] == "pending"
     assert "failedAt" not in restarted["phases"]["domain_discovery"]
     assert "error" not in restarted["phases"]["domain_discovery"]
+
+
+def test_build_progress_snapshot_reports_current_phase_and_percent(tmp_path):
+    manifest_path = tmp_path / "migration-manifest.json"
+    phases = {
+        "foundation": {"status": "done"},
+        "module_discovery": {"status": "done"},
+        "domain_discovery": {"status": "in_progress"},
+        "conflict_resolution": {"status": "pending"},
+        "domain_planning": {"status": "pending"},
+        "domain_execution": {"status": "pending"},
+        "rewiring": {"status": "pending"},
+        "integration_review": {"status": "pending"},
+        "reiterate": {"status": "pending"},
+    }
+    manifest = _write_manifest(manifest_path, phases=phases)
+
+    snapshot = orchestrator.build_progress_snapshot(manifest)
+
+    assert snapshot["bar"] == "[##>......]"
+    assert snapshot["completedPhases"] == 2
+    assert snapshot["totalPhases"] == 9
+    assert snapshot["percent"] == 22
+    assert snapshot["currentPhase"] == "domain_discovery"
+    assert snapshot["currentStatus"] == "in_progress"
+    assert snapshot["currentIndex"] == 3
+    assert snapshot["summary"] == "in progress: domain_discovery (3/9)"
+
+
+def test_load_issue_ledger_refreshes_progress_from_manifest(tmp_path):
+    manifest_path = tmp_path / "migration-manifest.json"
+    manifest = _write_manifest(manifest_path)
+    orchestrator.initialize_run_control(str(manifest_path), manifest)
+
+    updated = json.loads(manifest_path.read_text(encoding="utf-8"))
+    updated["phases"]["foundation"]["status"] = "done"
+    updated["phases"]["module_discovery"]["status"] = "awaiting_approval"
+    updated["meta"]["status"] = "in_progress"
+    manifest_path.write_text(json.dumps(updated), encoding="utf-8")
+
+    ledger = orchestrator.load_issue_ledger(str(manifest_path))
+
+    assert ledger["progress"]["bar"] == "[#!.......]"
+    assert ledger["progress"]["completedPhases"] == 1
+    assert ledger["progress"]["percent"] == 11
+    assert ledger["progress"]["currentPhase"] == "module_discovery"
+    assert ledger["progress"]["currentStatus"] == "awaiting_approval"
+    assert ledger["progress"]["summary"] == "awaiting approval: module_discovery (2/9)"
+
+
+def test_get_agent_timeout_seconds_uses_longer_default_for_domain_execution(monkeypatch):
+    monkeypatch.delenv("MIGRATION_TIMEOUT_DOMAIN_EXECUTION", raising=False)
+    monkeypatch.delenv("MIGRATION_TIMEOUT_LONG_PHASES", raising=False)
+
+    assert orchestrator.get_agent_timeout_seconds("domain_execution") == 5400
+    assert orchestrator.get_agent_timeout_seconds("foundation") == orchestrator.DEFAULT_AGENT_TIMEOUT
+
+
+def test_get_agent_timeout_seconds_respects_phase_specific_env_override(monkeypatch):
+    monkeypatch.setenv("MIGRATION_TIMEOUT_DOMAIN_EXECUTION", "7200")
+
+    assert orchestrator.get_agent_timeout_seconds("domain_execution") == 7200

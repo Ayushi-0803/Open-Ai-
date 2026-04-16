@@ -38,9 +38,10 @@ Treat the ledger as the shared run context for retries and known blockers. If a 
 ## Task
 
 1. Execute domains in dependency-safe order from `domain-plan-overview.json`.
-2. For each domain, keep `execution.<domain>.json` current with actual status.
-3. If you do not migrate a file, record why in the JSON rather than silently leaving it pending.
-4. Keep the top-level overview synchronized with per-domain execution JSONs.
+2. Create the migrated target files under `target_path`; this phase is not complete until those files exist on disk.
+3. For each domain, keep `execution.<domain>.json` current with actual status and concrete file paths.
+4. If you do not migrate a file, record why in the JSON rather than silently leaving it pending.
+5. Keep the top-level overview synchronized with per-domain execution JSONs.
 
 ## Required Per-Domain JSON Contract
 
@@ -87,6 +88,10 @@ Treat the ledger as the shared run context for retries and known blockers. If a 
 ## Output Rules
 
 - Keep statuses truthful.
+- `migrated` means you wrote the file during this phase and it exists on disk.
+- `present` means a concrete target file already existed before this phase; never use it for directories or the target root itself.
+- If a target candidate resolves only to `target_path`, treat that as unresolved and either choose a concrete file path or mark the file `blocked`.
 - Use `failed` or `blocked` for real execution problems.
 - Do not remove existing file rows from execution JSON unless the domain plan changed.
+- Update `resolvedTarget` to the concrete file path you wrote, not just the target root directory.
 - If blocked, write `{output_dir}/ERROR`.
