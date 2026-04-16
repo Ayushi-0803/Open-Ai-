@@ -1,0 +1,152 @@
+{
+  "sourceOfTruth": {
+    "kind": "deterministic-artifacts-with-bounded-source-sampling",
+    "inventoryCompleteness": "partial",
+    "artifactPaths": {
+      "depGraph": "experiments/stylelint/artifacts/migration-summaries/discovery/dep-graph.json",
+      "fileManifest": "experiments/stylelint/artifacts/migration-summaries/discovery/file-manifest.json",
+      "symbolIndex": "experiments/stylelint/artifacts/migration-summaries/discovery/symbol-index.json",
+      "dynamicRiskReport": "experiments/stylelint/artifacts/migration-summaries/discovery/dynamic-risk-report.json",
+      "dependencyShardsDir": "experiments/stylelint/artifacts/migration-summaries/discovery/dependency-shards"
+    },
+    "limitations": [
+      "Deterministic inventory covers 3 files only, while bounded source sampling shows a much larger repository.",
+      "Import/export edges below are preserved from deterministic artifacts and should be treated as incomplete for planning.",
+      "Symbol index is empty, so exported symbol coverage is unavailable from the deterministic base."
+    ]
+  },
+  "observedRepositoryStats": {
+    "sampledFromSourcePath": "experiments/stylelint/current",
+    "libFileCount": 968,
+    "libTestFileCount": 469,
+    "systemTestFileCount": 41,
+    "topLevelRuleDirectories": 146,
+    "ruleDirectoriesWithIndexTests": 146,
+    "typeDefinitionFiles": 2,
+    "formatters": 6,
+    "topLevelEntryPoints": [
+      "bin/stylelint.mjs",
+      "lib/index.mjs",
+      "lib/cli.mjs",
+      "lib/standalone.mjs",
+      "lib/postcssPlugin.mjs",
+      "lib/resolveConfig.mjs"
+    ]
+  },
+  "files": {
+    "lib/utils/__tests__/fixtures/index.js": {
+      "path": "lib/utils/__tests__/fixtures/index.js",
+      "language": "javascript",
+      "loc": 0,
+      "description": "Test module",
+      "exports": [],
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [
+        "test-file"
+      ],
+      "complexity": "low",
+      "hasTests": true,
+      "testFile": "lib/utils/__tests__/fixtures/index.js",
+      "domain": "tests",
+      "notes": [
+        "Fixture placeholder from the deterministic shard.",
+        "Useful only as evidence that test fixtures exist in the source tree."
+      ]
+    },
+    "types/stylelint/index.d.ts": {
+      "path": "types/stylelint/index.d.ts",
+      "language": "typescript",
+      "loc": 1650,
+      "description": "Source file for index.d",
+      "exports": [],
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [],
+      "complexity": "high",
+      "hasTests": false,
+      "testFile": null,
+      "domain": "interface",
+      "notes": [
+        "Represents the public TypeScript surface of stylelint.",
+        "Large declaration surface makes API parity a migration risk even though it is not runtime code."
+      ]
+    },
+    "types/stylelint/type-test.ts": {
+      "path": "types/stylelint/type-test.ts",
+      "language": "typescript",
+      "loc": 181,
+      "description": "Source file for type test",
+      "exports": [],
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [],
+      "complexity": "medium",
+      "hasTests": false,
+      "testFile": null,
+      "domain": "tests",
+      "notes": [
+        "Type-only validation file used by the TypeScript checker.",
+        "Dynamic import and CommonJS require usage here are test-surface behaviors, not core runtime plugin loading paths."
+      ]
+    }
+  },
+  "entryPoints": [],
+  "leafNodes": [
+    "lib/utils/__tests__/fixtures/index.js",
+    "types/stylelint/index.d.ts",
+    "types/stylelint/type-test.ts"
+  ],
+  "circularDeps": [],
+  "externalPackages": [],
+  "dynamicRiskHighlights": {
+    "flaggedFiles": 1,
+    "signals": [
+      "js-dynamic-import",
+      "js-dynamic-require"
+    ],
+    "notes": [
+      "The deterministic risk report flags only types/stylelint/type-test.ts.",
+      "Bounded source sampling found additional runtime dynamic imports in rule loading, formatter loading, custom formatter loading, and parser selection that are not represented in the deterministic graph."
+    ]
+  },
+  "observedArchitecture": {
+    "core": [
+      "lib/lintSource.mjs",
+      "lib/lintPostcssResult.mjs",
+      "lib/getPostcssResult.mjs",
+      "lib/rules/index.mjs",
+      "lib/reference"
+    ],
+    "integration": [
+      "lib/createStylelint.mjs",
+      "lib/getConfigForFile.mjs",
+      "lib/augmentConfig.mjs",
+      "lib/utils/getCustomSyntax.mjs",
+      "lib/utils/resolveSilent.mjs",
+      "lib/utils/suppressionsService.mjs"
+    ],
+    "interface": [
+      "bin/stylelint.mjs",
+      "lib/cli.mjs",
+      "lib/index.mjs",
+      "lib/postcssPlugin.mjs",
+      "lib/formatters"
+    ],
+    "tests": [
+      "lib/__tests__",
+      "lib/rules/*/__tests__",
+      "system-tests",
+      "types/stylelint/type-test.ts"
+    ]
+  }
+}

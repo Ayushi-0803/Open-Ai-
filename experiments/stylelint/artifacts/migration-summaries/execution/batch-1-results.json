@@ -1,0 +1,75 @@
+{
+  "batchId": "batch-1",
+  "name": "Dependency depth 0",
+  "parallelizable": true,
+  "dependsOn": [],
+  "status": "completed_with_warnings",
+  "files": [
+    {
+      "sourcePath": "types/stylelint/index.d.ts",
+      "targetPath": "experiemtns/stylint/migrated/crates/stylelint_types/src/public_api.rs",
+      "status": "success",
+      "riskTier": "human",
+      "patternsApplied": [
+        "public-api-types"
+      ],
+      "additionalOutputs": [
+        "experiemtns/stylint/migrated/crates/stylelint_types/src/options.rs",
+        "experiemtns/stylint/migrated/crates/stylelint_types/src/results.rs",
+        "experiemtns/stylint/migrated/crates/stylelint_types/src/lib.rs"
+      ],
+      "warnings": [
+        "AUTO-MIGRATED note added at top of public_api.rs; human review is still required before sign-off.",
+        "Rust surface preserves the documented facade shape and async compatibility boundary, but full runtime parity depends on later implementation of the lint engine and JS binding."
+      ]
+    },
+    {
+      "sourcePath": "types/stylelint/type-test.ts",
+      "targetPath": "experiemtns/stylint/migrated/tests/type_surface_parity.rs",
+      "status": "success",
+      "riskTier": "supervised",
+      "patternsApplied": [
+        "type-parity-test",
+        "esm-cjs-interop-check"
+      ],
+      "additionalOutputs": [
+        "experiemtns/stylint/migrated/bindings/node/index.mjs",
+        "experiemtns/stylint/migrated/bindings/node/package.json",
+        "experiemtns/stylint/migrated/crates/stylelint_node/src/lib.rs",
+        "experiemtns/stylint/migrated/tests/node_compat/type_surface.mjs",
+        "experiemtns/stylint/migrated/src/lib.rs",
+        "experiemtns/stylint/migrated/Cargo.toml",
+        "experiemtns/stylint/migrated/crates/stylelint_node/Cargo.toml",
+        "experiemtns/stylint/migrated/crates/stylelint_types/Cargo.toml"
+      ],
+      "warnings": [
+        "The CommonJS and dynamic import scenarios were recreated as Rust-facing parity tests plus a JS compatibility shim, but the shim is not yet backed by a compiled Rust Node addon.",
+        "Cargo-based verification could not run because the environment does not provide cargo or rustc."
+      ]
+    }
+  ],
+  "verification": {
+    "build": {
+      "command": "cargo build",
+      "status": "failed_environment",
+      "details": "zsh:1: command not found: cargo"
+    },
+    "tests": [
+      {
+        "command": "cargo test",
+        "status": "failed_environment",
+        "details": "cargo unavailable in PATH; rustc also not installed."
+      },
+      {
+        "command": "node tests/node_compat/type_surface.mjs",
+        "status": "passed"
+      }
+    ],
+    "lint": {
+      "command": "cargo clippy --all-targets --all-features -- -D warnings",
+      "status": "not_run_environment",
+      "details": "Skipped because cargo is unavailable in PATH."
+    }
+  },
+  "completedAt": "2026-04-16T09:40:09Z"
+}

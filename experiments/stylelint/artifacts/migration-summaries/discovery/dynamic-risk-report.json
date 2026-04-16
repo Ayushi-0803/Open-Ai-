@@ -1,0 +1,19 @@
+{
+  "summary": {
+    "flaggedFiles": 1,
+    "signals": [
+      "js-dynamic-import",
+      "js-dynamic-require"
+    ]
+  },
+  "files": [
+    {
+      "path": "types/stylelint/type-test.ts",
+      "language": "typescript",
+      "signals": [
+        "js-dynamic-import",
+        "js-dynamic-require"
+      ]
+    }
+  ]
+}

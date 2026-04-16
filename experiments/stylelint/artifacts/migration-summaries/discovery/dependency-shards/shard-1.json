@@ -1,0 +1,47 @@
+{
+  "name": "shard-1.json",
+  "fileCount": 3,
+  "files": [
+    {
+      "path": "lib/utils/__tests__/fixtures/index.js",
+      "language": "javascript",
+      "loc": 0,
+      "complexity": "low",
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [
+        "test-file"
+      ],
+      "hasTests": true
+    },
+    {
+      "path": "types/stylelint/index.d.ts",
+      "language": "typescript",
+      "loc": 1650,
+      "complexity": "high",
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [],
+      "hasTests": false
+    },
+    {
+      "path": "types/stylelint/type-test.ts",
+      "language": "typescript",
+      "loc": 181,
+      "complexity": "medium",
+      "imports": {
+        "internal": [],
+        "external": []
+      },
+      "importedBy": [],
+      "patterns": [],
+      "hasTests": false
+    }
+  ]
+}

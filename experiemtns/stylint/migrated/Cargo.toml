@@ -1,0 +1,14 @@
+[package]
+name = "stylelint_migrated"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "crates/stylelint_node",
+    "crates/stylelint_types",
+]
+
+[dependencies]
+stylelint_node = { path = "crates/stylelint_node" }
+stylelint_types = { path = "crates/stylelint_types" }

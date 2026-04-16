@@ -1,0 +1,12 @@
+{
+  "summary": {
+    "totalFiles": 3,
+    "totalShards": 1
+  },
+  "shards": [
+    {
+      "name": "shard-1.json",
+      "fileCount": 3
+    }
+  ]
+}

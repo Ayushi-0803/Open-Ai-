@@ -1,0 +1,47 @@
+{
+  "batchId": "batch-2",
+  "name": "Tests",
+  "parallelizable": true,
+  "dependsOn": [
+    "batch-1"
+  ],
+  "status": "completed_with_warnings",
+  "files": [
+    {
+      "sourcePath": "lib/utils/__tests__/fixtures/index.js",
+      "targetPath": "experiemtns/stylint/migrated/tests/fixtures/lib/utils/index.js",
+      "status": "success",
+      "riskTier": "auto",
+      "patternsApplied": [
+        "test-file"
+      ],
+      "warnings": [
+        "Fixture preserved as a zero-byte file after removing the trailing newline introduced during initial creation."
+      ]
+    }
+  ],
+  "verification": {
+    "build": {
+      "command": "cargo build",
+      "status": "failed_environment",
+      "details": "zsh:1: command not found: cargo"
+    },
+    "tests": [
+      {
+        "command": "cargo test",
+        "status": "failed_environment",
+        "details": "cargo unavailable in PATH; rustc also not installed."
+      },
+      {
+        "command": "node tests/node_compat/cached_import.mjs",
+        "status": "passed"
+      }
+    ],
+    "lint": {
+      "command": "cargo clippy --all-targets --all-features -- -D warnings",
+      "status": "not_run_environment",
+      "details": "Skipped because cargo is unavailable in PATH."
+    }
+  },
+  "completedAt": "2026-04-16T09:40:09Z"
+}

@@ -1,0 +1,91 @@
+{
+  "sourceOfTruth": {
+    "planningInput": "experiments/stylelint/artifacts/migration-summaries/planning/planning-input.json",
+    "riskPolicy": "experiments/stylelint/artifacts/migration-summaries/planning/risk-policy.json",
+    "contract": "Preserve deterministic batch order and risk tiers unless an explicit exception is recorded in PLAN.md."
+  },
+  "targetRoot": "experiemtns/stylint/migrated",
+  "totalFiles": 3,
+  "totalBatches": 2,
+  "batches": [
+    {
+      "id": "batch-1",
+      "name": "Dependency depth 0",
+      "category": "code",
+      "parallelizable": true,
+      "dependsOn": [],
+      "targetRoot": "experiemtns/stylint/migrated",
+      "files": [
+        {
+          "path": "types/stylelint/index.d.ts",
+          "domain": "interface",
+          "targetPath": "experiemtns/stylint/migrated/crates/stylelint_types/src/public_api.rs",
+          "riskTier": "human",
+          "patterns": [
+            "public-api-types"
+          ],
+          "dependencies": [],
+          "hasTests": false,
+          "dependencyDepth": 0,
+          "planningNotes": [
+            "High-risk public API contract.",
+            "Maps to Rust API surface plus compatibility facade.",
+            "Requires human review before execution sign-off."
+          ]
+        },
+        {
+          "path": "types/stylelint/type-test.ts",
+          "domain": "tests",
+          "targetPath": "experiemtns/stylint/migrated/tests/type_surface_parity.rs",
+          "riskTier": "supervised",
+          "patterns": [
+            "type-parity-test",
+            "esm-cjs-interop-check"
+          ],
+          "dependencies": [],
+          "hasTests": false,
+          "dependencyDepth": 0,
+          "planningNotes": [
+            "Supervised because it validates compatibility behavior rather than core runtime logic.",
+            "Must preserve require() and dynamic import coverage against the Rust-backed facade."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "batch-2",
+      "name": "Tests",
+      "category": "tests",
+      "parallelizable": true,
+      "dependsOn": [
+        "batch-1"
+      ],
+      "targetRoot": "experiemtns/stylint/migrated",
+      "files": [
+        {
+          "path": "lib/utils/__tests__/fixtures/index.js",
+          "domain": "tests",
+          "targetPath": "experiemtns/stylint/migrated/tests/fixtures/lib/utils/index.js",
+          "riskTier": "auto",
+          "patterns": [
+            "test-file"
+          ],
+          "dependencies": [],
+          "hasTests": true,
+          "dependencyDepth": "tests-last",
+          "planningNotes": [
+            "Fixture placeholder only.",
+            "Observed source file is intentionally empty; preserve emptiness.",
+            "Used in the wider lazy-import/module-loading test surface."
+          ]
+        }
+      ]
+    }
+  ],
+  "riskTierDistribution": {
+    "auto": 1,
+    "supervised": 1,
+    "human": 1
+  },
+  "deterministicOrderingExceptions": []
+}

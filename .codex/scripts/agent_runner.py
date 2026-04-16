@@ -81,11 +81,11 @@ def spawn_codex(skill_path: str, context: dict,
                 timeout: int = 1800) -> dict:
     """Spawn a Codex CLI sub-agent."""
     prompt = _build_prompt(skill_path, context)
-    
-    cmd = ["codex", "--full-auto", "--sandbox"]
+
+    cmd = ["codex", "exec", "--full-auto", "--sandbox", "workspace-write"]
     if model:
         cmd.extend(["--model", model])
-    cmd.extend(["--task", prompt])
+    cmd.extend(["--", prompt])
 
     try:
         result = subprocess.run(
