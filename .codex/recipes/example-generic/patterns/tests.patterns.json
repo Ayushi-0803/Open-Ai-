@@ -1,0 +1,28 @@
+{
+  "domain": "tests",
+  "description": "Automated verification and test scaffolding.",
+  "detection": {
+    "file_patterns": [
+      "**/tests/**",
+      "**/test_*.py",
+      "**/*_test.py"
+    ],
+    "path_hints": [
+      "tests",
+      "test_"
+    ],
+    "signals": [
+      "test-file"
+    ]
+  },
+  "rules": [
+    {
+      "name": "tests-last",
+      "intent": "Plan and execute tests after domain code paths are structurally available."
+    }
+  ],
+  "constraints": [
+    "Do not silently drop tests from execution artifacts.",
+    "Test ownership should follow the feature area but remain in the tests domain for migration sequencing."
+  ]
+}

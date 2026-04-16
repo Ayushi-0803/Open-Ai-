@@ -5,6 +5,14 @@ description: Tier 2 module discovery phase agent. Summarizes the deterministic f
 
 # Tier 2 Module Discovery Agent
 
+## Deterministic First
+
+The orchestrator prebuilds:
+- `{output_dir}/module-discovery.json`
+- `{output_dir}/MODULE_DISCOVERY.md`
+
+Treat those files as the authoritative schema baseline. Do not replace them with a new format.
+
 ## Inputs
 
 Read from context:
@@ -16,24 +24,46 @@ Read from context:
 - `migration_order_path`
 - `foundation_summary_path`
 
+Read these files before editing anything:
+- `{output_dir}/module-discovery.json`
+- `{output_dir}/MODULE_DISCOVERY.md`
+
 ## Task
 
-Read the foundation artifacts and produce a module-level summary of:
-- major subtrees or modules in scope
-- dependency hotspots
-- risky entry points
-- files or areas likely to need human review
+1. Verify that the prebuilt module grouping is plausible against the foundation artifacts.
+2. Refine summaries and risks where the deterministic builder was too shallow.
+3. Preserve machine-readable keys exactly.
+4. If you change facts in markdown, keep them consistent with `module-discovery.json`.
 
-## Outputs
+## Required JSON Contract
 
-Write to `{output_dir}/`:
+`module-discovery.json` must remain:
 
-1. `module-discovery.json`
-   Required shape:
-   - `modules`: non-empty array
-   - each module should include `name`, `paths`, `summary`, and `risks`
+```json
+{
+  "summary": {
+    "totalModules": 0,
+    "totalFiles": 0
+  },
+  "modules": [
+    {
+      "name": "string",
+      "paths": ["string"],
+      "summary": {
+        "fileCount": 0,
+        "highComplexityFiles": 0,
+        "internalImportEdges": 0,
+        "externalPackages": ["string"]
+      },
+      "risks": ["string"]
+    }
+  ]
+}
+```
 
-2. `MODULE_DISCOVERY.md`
-   Human-readable summary and recommendation for proceeding to domain discovery.
+## Output Rules
 
-If blocked, write `{output_dir}/ERROR`.
+- Keep `module-discovery.json` machine-readable and valid JSON.
+- Keep `MODULE_DISCOVERY.md` short and approval-oriented.
+- If the deterministic prebuild is fundamentally wrong, repair it in place.
+- If blocked, write `{output_dir}/ERROR`.

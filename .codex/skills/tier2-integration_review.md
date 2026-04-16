@@ -5,6 +5,15 @@ description: Tier 2 integration review phase agent. Verifies the cross-domain mi
 
 # Tier 2 Integration Review Agent
 
+## Deterministic First
+
+The orchestrator prebuilds:
+- `{output_dir}/parity-results.json`
+- `{output_dir}/integration-review.json`
+- `{output_dir}/INTEGRATION_REVIEW.md`
+
+Those files are the review baseline. Refine them in place.
+
 ## Inputs
 
 Read from context:
@@ -24,26 +33,42 @@ Read from context:
 
 ## Task
 
-Run the broadest safe integration review you can:
-- build
-- tests
-- lint
-- cross-domain import consistency
-- recipe parity results from `parity-results.json`
+1. Review deterministic checks first.
+2. Add broader safe review evidence if you can run it.
+3. Keep the routing truthful:
+   - `pass`
+   - `fail`
+   - `human`
 
-## Outputs
+## Required JSON Contract
 
-Write to `{output_dir}/`:
+```json
+{
+  "checks": [
+    {
+      "name": "string",
+      "status": "pass|fail|human-review",
+      "details": {}
+    }
+  ],
+  "routing": {
+    "pass": ["string"],
+    "fail": ["string"],
+    "human": ["string"]
+  },
+  "summary": {
+    "status": "pass|fail|human-review",
+    "totalChecks": 0,
+    "passed": 0,
+    "failed": 0,
+    "humanReview": 0
+  }
+}
+```
 
-1. `integration-review.json`
-   Required:
-   - `checks`: non-empty array
-   - `routing`
-   - `summary`
+## Output Rules
 
-2. `INTEGRATION_REVIEW.md`
-   Human-readable recommendation with pass/fail/human routing.
-
-Do not overwrite `parity-results.json`; treat it as orchestrator-produced input unless you must repair a corrupt file.
-
-If blocked, write `{output_dir}/ERROR`.
+- Do not overwrite `parity-results.json` except to repair corruption.
+- Keep `integration-review.json` machine-readable.
+- Keep `INTEGRATION_REVIEW.md` concise and decision-oriented.
+- If blocked, write `{output_dir}/ERROR`.

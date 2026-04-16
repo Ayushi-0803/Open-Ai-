@@ -16,13 +16,49 @@
       "name": "core",
       "patterns_file": "patterns/core.patterns.json",
       "priority": 1
+    },
+    {
+      "name": "interface",
+      "patterns_file": "patterns/interface.patterns.json",
+      "priority": 2
+    },
+    {
+      "name": "integration",
+      "patterns_file": "patterns/integration.patterns.json",
+      "priority": 3
+    },
+    {
+      "name": "tests",
+      "patterns_file": "patterns/tests.patterns.json",
+      "priority": 4
     }
   ],
   "domain_ordering": {
-    "core": []
+    "core": [],
+    "integration": [
+      "core"
+    ],
+    "interface": [
+      "core",
+      "integration"
+    ],
+    "tests": [
+      "core",
+      "integration",
+      "interface"
+    ]
   },
   "foundation": {
     "ast_tool": "builtin:generic-tier2-foundation"
+  },
+  "samples": {
+    "tier2_source_path": "sample-source",
+    "expected_domains": [
+      "core",
+      "interface",
+      "integration",
+      "tests"
+    ]
   },
   "verification": {
     "custom_checks": [

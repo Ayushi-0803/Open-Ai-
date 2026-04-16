@@ -22,27 +22,48 @@ Read from context:
 
 ## Task
 
-Read the integration review outputs first. Fix the most important failures without regressing passing domains.
+Read `integration-review.json` first. Fix only the highest-value failures and keep per-domain artifacts truthful.
 
-When you identify reusable learned patterns, propose them in a patch payload instead of mutating AGENTS files directly.
+When you learn a reusable rule, propose it in `agents-md.patch.json` instead of editing `AGENTS.<domain>.md` directly.
 
-## Outputs
+## Required Contracts
 
-Write to `{output_dir}/`:
+`reiterate-results.json` must include:
 
-1. `reiterate-results.json`
-   Machine-readable summary of fixes, remaining failures, and verification reruns.
+```json
+{
+  "status": "completed|partial|failed",
+  "fixedChecks": ["string"],
+  "remainingFailures": ["string"],
+  "verificationReruns": [
+    {
+      "name": "string",
+      "status": "pass|fail|skipped",
+      "details": "string"
+    }
+  ]
+}
+```
 
-2. `agents-md.patch.json`
-   Required shape:
-   - `mode`
-   - `proposals`: array
-   - each proposal may include `domain`, `title`, `content`, `apply`
+`agents-md.patch.json` must remain:
 
-3. `agents-md-patches.md`
-   Human-readable summary of proposed AGENTS updates.
+```json
+{
+  "mode": "append",
+  "proposals": [
+    {
+      "domain": "string|null",
+      "title": "string",
+      "content": "string",
+      "apply": true
+    }
+  ]
+}
+```
 
-4. `REITERATE.md`
-   Human-readable summary of fixes and remaining risks.
+## Output Rules
 
-If blocked, write `{output_dir}/ERROR`.
+- Keep fixes and proposed AGENTS changes separate.
+- Do not mutate AGENTS files directly.
+- Keep `REITERATE.md` short and explicit about what still fails.
+- If blocked, write `{output_dir}/ERROR`.

@@ -5,6 +5,20 @@ description: Tier 2 domain planning phase agent. Produces per-domain execution p
 
 # Tier 2 Domain Planning Agent
 
+## Deterministic First
+
+The orchestrator prebuilds, for every domain:
+- `decoupled-files.<domain>.json`
+- `rewiring-imports.<domain>.json`
+- `AGENTS.<domain>.md`
+- `planning.<domain>.md`
+
+It also prebuilds:
+- `{output_dir}/domain-plan-overview.json`
+- `{output_dir}/DOMAIN_PLANNING.md`
+
+Your job is to refine those artifacts without breaking their schema or path references.
+
 ## Inputs
 
 Read from context:
@@ -25,27 +39,92 @@ Read from context:
 - `reference_path`
 - `non_negotiables`
 
-## Task
+## Required Per-Domain Contracts
 
-For each domain, create `{output_dir}/<domain>/planning/` and write:
-- `decoupled-files.<domain>.json`
-- `rewiring-imports.<domain>.json`
-- `AGENTS.<domain>.md`
-- `planning.<domain>.md`
+`decoupled-files.<domain>.json`:
 
-Use recipe templates if present, but always emit concrete files rather than leaving templates unresolved.
+```json
+{
+  "domain": "string",
+  "executionOrder": 0,
+  "dependsOnDomains": ["string"],
+  "ownedFiles": ["string"],
+  "sharedFiles": [
+    {
+      "path": "string",
+      "domains": ["string"]
+    }
+  ],
+  "targetCandidates": [
+    {
+      "sourcePath": "string",
+      "targetCandidates": ["string"]
+    }
+  ],
+  "summary": {
+    "ownedFileCount": 0,
+    "sharedFileCount": 0,
+    "crossDomainImportCount": 0
+  }
+}
+```
 
-## Combined Outputs
+`rewiring-imports.<domain>.json`:
 
-Write to `{output_dir}/`:
+```json
+{
+  "domain": "string",
+  "dependsOnDomains": ["string"],
+  "plannedImports": [
+    {
+      "sourcePath": "string",
+      "sourceDomain": "string",
+      "dependencyPath": "string",
+      "dependencyDomain": "string",
+      "rewriteKind": "cross-domain-import",
+      "targetFileCandidates": ["string"],
+      "targetDependencyCandidates": ["string"],
+      "resolvedTargetFile": "string|null",
+      "resolvedDependencyTarget": "string|null",
+      "safeRewrite": false,
+      "notes": ["string"]
+    }
+  ],
+  "summary": {
+    "totalRewrites": 0,
+    "safeRewriteCandidates": 0
+  }
+}
+```
 
-1. `domain-plan-overview.json`
-   Required:
-   - `domains`: non-empty array
-   - each entry includes `name`, `decoupledFilesPath`, `rewiringImportsPath`, `agentsPath`, `summaryMd`
-   - include domain execution order or dependency metadata
+## Required Overview Contract
 
-2. `DOMAIN_PLANNING.md`
-   Human-readable approval summary across all domains.
+`domain-plan-overview.json` must remain:
 
-If blocked, write `{output_dir}/ERROR`.
+```json
+{
+  "summary": {
+    "totalDomains": 0,
+    "orderedDomains": ["string"]
+  },
+  "domains": [
+    {
+      "name": "string",
+      "executionOrder": 0,
+      "dependsOnDomains": ["string"],
+      "decoupledFilesPath": "/abs/path",
+      "rewiringImportsPath": "/abs/path",
+      "agentsPath": "/abs/path",
+      "summaryMd": "/abs/path"
+    }
+  ]
+}
+```
+
+## Output Rules
+
+- Preserve absolute paths in the overview.
+- Do not leave templates unresolved.
+- If a domain has no files, still emit empty but valid per-domain planning artifacts.
+- Keep `AGENTS.<domain>.md` concrete, not aspirational.
+- If blocked, write `{output_dir}/ERROR`.

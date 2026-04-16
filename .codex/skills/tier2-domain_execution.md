@@ -5,6 +5,16 @@ description: Tier 2 domain execution phase agent. Executes per-domain plans and 
 
 # Tier 2 Domain Execution Agent
 
+## Deterministic First
+
+The orchestrator prebuilds:
+- `{output_dir}/domain-execution-overview.json`
+- `{output_dir}/DOMAIN_EXECUTION.md`
+- `{output_dir}/<domain>/execution/execution.<domain>.json`
+- `{output_dir}/<domain>/execution/execution.<domain>.md`
+
+Treat those files as the execution ledger. Update them in place as you work.
+
 ## Inputs
 
 Read from context:
@@ -19,24 +29,56 @@ Read from context:
 
 ## Task
 
-Read the domain planning overview and execute domains in dependency-safe order.
+1. Execute domains in dependency-safe order from `domain-plan-overview.json`.
+2. For each domain, keep `execution.<domain>.json` current with actual status.
+3. If you do not migrate a file, record why in the JSON rather than silently leaving it pending.
+4. Keep the top-level overview synchronized with per-domain execution JSONs.
 
-For each domain, create `{output_dir}/<domain>/execution/` and write:
-- `execution.<domain>.json`
-- `execution.<domain>.md`
+## Required Per-Domain JSON Contract
 
-Attempt the migration generically and record warnings rather than silently skipping hard files.
+```json
+{
+  "domain": "string",
+  "status": "completed|partial|no-op|failed|blocked",
+  "summary": {
+    "plannedFileCount": 0,
+    "resolvedTargetCount": 0,
+    "pendingCount": 0
+  },
+  "files": [
+    {
+      "sourcePath": "string",
+      "targetCandidates": ["string"],
+      "resolvedTarget": "string|null",
+      "status": "present|migrated|pending|failed|blocked"
+    }
+  ],
+  "notes": ["string"]
+}
+```
 
-## Combined Outputs
+## Required Overview Contract
 
-Write to `{output_dir}/`:
+```json
+{
+  "summary": {
+    "totalDomains": 0,
+    "completedDomains": 0
+  },
+  "domains": [
+    {
+      "name": "string",
+      "status": "string",
+      "executionJson": "/abs/path",
+      "summaryMd": "/abs/path"
+    }
+  ]
+}
+```
 
-1. `domain-execution-overview.json`
-   Required:
-   - `domains`: non-empty array
-   - each entry includes `name`, `executionJson`, `summaryMd`, `status`
+## Output Rules
 
-2. `DOMAIN_EXECUTION.md`
-   Human-readable summary of what ran, what failed, and what needs review.
-
-If blocked, write `{output_dir}/ERROR`.
+- Keep statuses truthful.
+- Use `failed` or `blocked` for real execution problems.
+- Do not remove existing file rows from execution JSON unless the domain plan changed.
+- If blocked, write `{output_dir}/ERROR`.

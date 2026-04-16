@@ -1,0 +1,33 @@
+{
+  "domain": "integration",
+  "description": "Gateway clients, adapters, infrastructure, and external system boundaries.",
+  "detection": {
+    "file_patterns": [
+      "**/clients/**",
+      "**/gateways/**",
+      "**/integration/**",
+      "**/adapters/**"
+    ],
+    "path_hints": [
+      "gateway",
+      "client",
+      "integration",
+      "adapter"
+    ],
+    "code_patterns": [
+      "Client",
+      "Gateway",
+      "Adapter"
+    ]
+  },
+  "rules": [
+    {
+      "name": "preserve-boundaries",
+      "intent": "Keep external API boundaries explicit and traceable after migration."
+    }
+  ],
+  "constraints": [
+    "Do not inline external integrations into core logic.",
+    "Cross-domain imports into integration code should be deliberate and rewired clearly."
+  ]
+}
