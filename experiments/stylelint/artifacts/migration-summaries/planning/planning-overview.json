@@ -1,0 +1,102 @@
+{
+  "summary": {
+    "totalFiles": 3,
+    "totalBatches": 2,
+    "riskTierDistribution": {
+      "auto": 1,
+      "supervised": 1,
+      "human": 1
+    },
+    "countsByReviewMode": {
+      "auto": 1,
+      "supervised": 1,
+      "human": 1
+    }
+  },
+  "artifactContracts": [
+    {
+      "name": "AGENTS.md",
+      "purpose": "Transformation rules for execution workers"
+    },
+    {
+      "name": "migration-batches.json",
+      "purpose": "Dependency-ordered execution batches"
+    },
+    {
+      "name": "planning-overview.json",
+      "purpose": "Machine-readable stage outputs and validation contracts"
+    },
+    {
+      "name": "PLAN.md",
+      "purpose": "Human-readable approval summary"
+    }
+  ],
+  "executionPlan": {
+    "batchingStrategy": "dependency-depth with tests last",
+    "riskStrategy": "deterministic baseline from complexity, test coverage, fan-in, and cycles",
+    "targetRoot": "experiemtns/stylint/migrated",
+    "requiredCommands": [
+      "cargo build",
+      "cargo test",
+      "cargo clippy --all-targets --all-features -- -D warnings"
+    ],
+    "optionalRecipeChecks": [
+      {
+        "name": "api-contract",
+        "command": "bash verify/api-contract.sh",
+        "required": false
+      },
+      {
+        "name": "smoke",
+        "command": "python3 verify/smoke.py",
+        "required": false
+      }
+    ],
+    "batches": [
+      {
+        "id": "batch-1",
+        "name": "Dependency depth 0",
+        "category": "code",
+        "parallelizable": true,
+        "dependsOn": [],
+        "files": [
+          "types/stylelint/index.d.ts",
+          "types/stylelint/type-test.ts"
+        ]
+      },
+      {
+        "id": "batch-2",
+        "name": "Tests",
+        "category": "tests",
+        "parallelizable": true,
+        "dependsOn": [
+          "batch-1"
+        ],
+        "files": [
+          "lib/utils/__tests__/fixtures/index.js"
+        ]
+      }
+    ]
+  },
+  "humanReviewQueue": [
+    {
+      "path": "types/stylelint/index.d.ts",
+      "riskTier": "human",
+      "reasons": [
+        "no direct test coverage",
+        "high complexity"
+      ],
+      "requiredChecks": [
+        "public API facade parity",
+        "autofix edit-info parity",
+        "plugin and config-resolution compatibility"
+      ]
+    }
+  ],
+  "assumptions": [
+    "This planning set preserves the deterministic 3-file contract and does not claim to cover the full stylelint migration surface.",
+    "No reference_path was provided, so after-state style guidance is limited to styleguide/rust and recipe constraints.",
+    "The target root string is intentionally preserved as provided: experiemtns/stylint/migrated."
+  ],
+  "orderingExceptions": []
+}

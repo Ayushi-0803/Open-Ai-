@@ -1,0 +1,110 @@
+{
+  "sourceOfTruth": {
+    "kind": "deterministic-artifacts-with-bounded-source-sampling",
+    "inventoryCompleteness": "partial",
+    "limitations": [
+      "Manifest contains 3 deterministic files only.",
+      "Risk and dependency fields below are authoritative only for those files.",
+      "Repository-wide migration planning must combine this manifest with DISCOVERY.md architectural guidance."
+    ]
+  },
+  "files": [
+    {
+      "path": "lib/utils/__tests__/fixtures/index.js",
+      "type": "test",
+      "domain": "tests",
+      "complexity": "low",
+      "loc": 0,
+      "dependencies": [],
+      "dependents": [],
+      "hasTests": true,
+      "testFile": "lib/utils/__tests__/fixtures/index.js",
+      "patterns": [
+        "test-file"
+      ],
+      "riskTier": "auto",
+      "migrationPriority": 4,
+      "notes": [
+        "Fixture artifact only.",
+        "No direct migration value beyond confirming fixture-based tests exist."
+      ]
+    },
+    {
+      "path": "types/stylelint/index.d.ts",
+      "type": "module",
+      "domain": "interface",
+      "complexity": "high",
+      "loc": 1650,
+      "dependencies": [],
+      "dependents": [],
+      "hasTests": false,
+      "testFile": null,
+      "patterns": [
+        "public-api-types"
+      ],
+      "riskTier": "human",
+      "migrationPriority": 3,
+      "notes": [
+        "Large public API surface that documents expected runtime behavior.",
+        "Should be used as a parity reference while designing the Rust API boundary."
+      ]
+    },
+    {
+      "path": "types/stylelint/type-test.ts",
+      "type": "module",
+      "domain": "tests",
+      "complexity": "medium",
+      "loc": 181,
+      "dependencies": [],
+      "dependents": [],
+      "hasTests": false,
+      "testFile": null,
+      "patterns": [
+        "type-parity-test",
+        "esm-cjs-interop-check"
+      ],
+      "riskTier": "supervised",
+      "migrationPriority": 4,
+      "notes": [
+        "Covers API typing, resolveConfig, createPlugin, utils, and CJS/ESM import shapes.",
+        "Dynamic-import signal is expected here and should not be mistaken for a production-only loader."
+      ]
+    }
+  ],
+  "summary": {
+    "totalFiles": 3,
+    "totalLoc": 1831,
+    "filesWithTests": 1,
+    "filesWithoutTests": 2,
+    "patternDistribution": {
+      "test-file": 1,
+      "public-api-types": 1,
+      "type-parity-test": 1,
+      "esm-cjs-interop-check": 1
+    }
+  },
+  "observedRepositoryCoverage": {
+    "sampledSourcePath": "experiments/stylelint/current",
+    "topLevelStructure": [
+      "bin",
+      "docs",
+      "lib",
+      "scripts",
+      "system-tests",
+      "types"
+    ],
+    "repositoryCounts": {
+      "libFiles": 968,
+      "libTestFiles": 469,
+      "allDetectedTestFiles": 479,
+      "systemTestFiles": 41,
+      "ruleDirectories": 146,
+      "ruleDirectoriesWithIndexTests": 146
+    },
+    "migrationImplications": [
+      "Core runtime and rule logic dominate the codebase footprint.",
+      "Test structure is dense enough to drive behavior-preserving porting.",
+      "Deterministic manifest under-represents the actual migration surface and must not be used alone for batch sizing."
+    ]
+  }
+}

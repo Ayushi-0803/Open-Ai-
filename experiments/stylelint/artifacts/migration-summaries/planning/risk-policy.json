@@ -1,0 +1,5 @@
+{
+  "batchingStrategy": "dependency-depth with tests last",
+  "riskStrategy": "deterministic baseline from complexity, test coverage, fan-in, and cycles",
+  "llmContract": "Planning must preserve batch order and risk tiers unless it records an explicit exception."
+}

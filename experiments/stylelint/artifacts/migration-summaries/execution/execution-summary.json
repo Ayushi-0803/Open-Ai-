@@ -1,0 +1,65 @@
+{
+  "status": "completed_with_warnings",
+  "completedAt": "2026-04-16T09:40:09Z",
+  "batches": [
+    {
+      "id": "batch-1",
+      "name": "Dependency depth 0",
+      "status": "completed_with_warnings",
+      "parallelizable": true
+    },
+    {
+      "id": "batch-2",
+      "name": "Tests",
+      "status": "completed_with_warnings",
+      "parallelizable": true
+    }
+  ],
+  "batchTotals": {
+    "total": 2,
+    "completed": 2,
+    "parallelizable": [
+      "batch-1",
+      "batch-2"
+    ]
+  },
+  "files": {
+    "total": 3,
+    "successful": 3,
+    "failed": 0
+  },
+  "warnings": [
+    "Human review remains required for the migrated public API contract in experiemtns/stylint/migrated/crates/stylelint_types/src/public_api.rs.",
+    "The migrated Node compatibility shim preserves the observable API surface but is currently a JavaScript compatibility layer rather than a compiled Rust-backed addon.",
+    "Required Rust verification commands could not run because cargo and rustc are not installed in the execution environment."
+  ],
+  "verification": {
+    "build": {
+      "command": "cargo build",
+      "status": "failed_environment",
+      "details": "zsh:1: command not found: cargo"
+    },
+    "tests": {
+      "cargoTest": {
+        "command": "cargo test",
+        "status": "failed_environment",
+        "details": "cargo unavailable in PATH; rustc also not installed."
+      },
+      "nodeCompat": [
+        {
+          "command": "node tests/node_compat/type_surface.mjs",
+          "status": "passed"
+        },
+        {
+          "command": "node tests/node_compat/cached_import.mjs",
+          "status": "passed"
+        }
+      ]
+    },
+    "lint": {
+      "command": "cargo clippy --all-targets --all-features -- -D warnings",
+      "status": "not_run_environment",
+      "details": "Skipped because cargo is unavailable in PATH."
+    }
+  }
+}

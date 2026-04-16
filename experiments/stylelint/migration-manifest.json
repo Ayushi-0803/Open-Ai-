@@ -1,0 +1,182 @@
+{
+  "meta": {
+    "sessionId": "migrate-20260416-097167",
+    "recipe": "example-generic",
+    "sourcePath": "experiments/stylelint/current",
+    "targetPath": "experiemtns/stylint/migrated",
+    "artifactsDir": "experiments/stylelint/artifacts",
+    "summariesDir": "experiments/stylelint/artifacts/migration-summaries",
+    "referencePath": null,
+    "sourceDescription": "stylelint: a CSS linter with 100+ built-in rules, autofix, plugins and shareable configs, CSS-like language support, and embedded style extraction.",
+    "targetDescription": "A Rust reimplementation of the project that preserves current stylelint functionality and behavior.",
+    "testCommand": "cargo test",
+    "buildCommand": "cargo build",
+    "lintCommand": "cargo clippy --all-targets --all-features -- -D warnings",
+    "nonNegotiables": [
+      "Follow the Rust style guide at styleguide/rust.",
+      "Preserve all current functionality and observable behavior.",
+      "Preserve autofix support.",
+      "Preserve plugin support and shareable config support.",
+      "Preserve support for CSS-like languages including SCSS, Sass, Less, and SugarSS.",
+      "Preserve extraction of embedded styles from HTML, Markdown, and CSS-in-JS."
+    ],
+    "domains": [
+      "core",
+      "integration",
+      "interface",
+      "tests"
+    ],
+    "domainOrdering": {
+      "core": [],
+      "integration": [
+        "core"
+      ],
+      "interface": [
+        "core",
+        "integration"
+      ],
+      "tests": [
+        "core",
+        "integration",
+        "interface"
+      ]
+    },
+    "status": "in_progress",
+    "tier": "high",
+    "frameworkVersion": "tier-2",
+    "createdAt": "2026-04-16T09:19:48Z"
+  },
+  "phases": {
+    "foundation": {
+      "status": "pending"
+    },
+    "module_discovery": {
+      "status": "pending"
+    },
+    "domain_discovery": {
+      "status": "pending"
+    },
+    "conflict_resolution": {
+      "status": "pending"
+    },
+    "domain_planning": {
+      "status": "pending"
+    },
+    "domain_execution": {
+      "status": "pending"
+    },
+    "rewiring": {
+      "status": "pending"
+    },
+    "integration_review": {
+      "status": "pending"
+    },
+    "reiterate": {
+      "status": "pending"
+    },
+    "discovery": {
+      "status": "done",
+      "failedAt": "2026-04-16T14:54:01Z",
+      "error": "Agent exited with code 1\n\nStderr:\npoint::responses_websocket: failed to connect to websocket: IO error: failed to lookup address information: nodename nor servname provided, or not known, url: wss://api.openai.com/v1/responses\n2026-04-16T09:23:31.011752Z ERROR codex_api::endpoint::responses_websocket: failed to connect to websocket: IO error: failed to lookup address information: nodename nor servname provided, or not known, url: wss://api.openai.com/v1/responses\nERROR: Reconnecting... 2/5\n2026-",
+      "artifacts": {
+        "outputDir": "experiments/stylelint/artifacts/migration-summaries/discovery",
+        "successMarker": "experiments/stylelint/artifacts/migration-summaries/discovery/DISCOVERY.md",
+        "depGraph": "experiments/stylelint/artifacts/migration-summaries/discovery/dep-graph.json",
+        "fileManifest": "experiments/stylelint/artifacts/migration-summaries/discovery/file-manifest.json",
+        "symbolIndex": "experiments/stylelint/artifacts/migration-summaries/discovery/symbol-index.json",
+        "dynamicRiskReport": "experiments/stylelint/artifacts/migration-summaries/discovery/dynamic-risk-report.json",
+        "dependencyShardsDir": "experiments/stylelint/artifacts/migration-summaries/discovery/dependency-shards",
+        "validation": {
+          "phase": "discovery",
+          "validator": "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+          "command": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+            "discovery",
+            "experiments/stylelint/artifacts/migration-summaries/discovery"
+          ],
+          "passed": true,
+          "stdout": "Artifacts valid for phase discovery: /Users/thrishul.reddy/Open-Ai-/experiments/stylelint/artifacts/migration-summaries/discovery",
+          "stderr": "",
+          "requiredArtifacts": [
+            "dep-graph.json",
+            "file-manifest.json",
+            "symbol-index.json",
+            "dynamic-risk-report.json",
+            "dependency-shards/index.json",
+            "DISCOVERY.md"
+          ]
+        }
+      },
+      "awaitingApprovalAt": "2026-04-16T14:58:18Z",
+      "approvedAt": "2026-04-16T14:59:56Z",
+      "completedAt": "2026-04-16T14:59:56Z"
+    },
+    "planning": {
+      "status": "done",
+      "artifacts": {
+        "outputDir": "experiments/stylelint/artifacts/migration-summaries/planning",
+        "successMarker": "experiments/stylelint/artifacts/migration-summaries/planning/PLAN.md",
+        "planningInput": "experiments/stylelint/artifacts/migration-summaries/planning/planning-input.json",
+        "riskPolicy": "experiments/stylelint/artifacts/migration-summaries/planning/risk-policy.json",
+        "planningOverview": "experiments/stylelint/artifacts/migration-summaries/planning/planning-overview.json",
+        "batches": "experiments/stylelint/artifacts/migration-summaries/planning/migration-batches.json",
+        "agentsRules": "experiments/stylelint/artifacts/migration-summaries/planning/AGENTS.md",
+        "validation": {
+          "phase": "planning",
+          "validator": "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+          "command": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+            "planning",
+            "experiments/stylelint/artifacts/migration-summaries/planning"
+          ],
+          "passed": true,
+          "stdout": "Artifacts valid for phase planning: /Users/thrishul.reddy/Open-Ai-/experiments/stylelint/artifacts/migration-summaries/planning",
+          "stderr": "",
+          "requiredArtifacts": [
+            "planning-input.json",
+            "risk-policy.json",
+            "AGENTS.md",
+            "migration-batches.json",
+            "planning-overview.json",
+            "PLAN.md"
+          ]
+        }
+      },
+      "awaitingApprovalAt": "2026-04-16T15:03:51Z",
+      "approvedAt": "2026-04-16T15:04:35Z",
+      "completedAt": "2026-04-16T15:04:35Z"
+    },
+    "execution": {
+      "status": "done",
+      "artifacts": {
+        "outputDir": "experiments/stylelint/artifacts/migration-summaries/execution",
+        "successMarker": "experiments/stylelint/artifacts/migration-summaries/execution/EXECUTION.md",
+        "executionSummary": "experiments/stylelint/artifacts/migration-summaries/execution/execution-summary.json",
+        "validation": {
+          "phase": "execution",
+          "validator": "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+          "command": [
+            "/opt/homebrew/opt/python@3.14/bin/python3.14",
+            "/Users/thrishul.reddy/Open-Ai-/.codex/scripts/validate_artifacts.py",
+            "execution",
+            "experiments/stylelint/artifacts/migration-summaries/execution"
+          ],
+          "passed": true,
+          "stdout": "Artifacts valid for phase execution: /Users/thrishul.reddy/Open-Ai-/experiments/stylelint/artifacts/migration-summaries/execution",
+          "stderr": "",
+          "requiredArtifacts": [
+            "EXECUTION.md",
+            "execution-summary.json"
+          ]
+        }
+      },
+      "completedAt": "2026-04-16T15:10:56Z"
+    },
+    "review": {
+      "status": "in_progress"
+    }
+  },
+  "checkpoints": []
+}

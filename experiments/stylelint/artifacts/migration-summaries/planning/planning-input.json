@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "totalFiles": 3,
+    "nonTestFiles": 2,
+    "testFiles": 1,
+    "totalBatches": 2,
+    "cyclePaths": []
+  },
+  "policy": {
+    "batchingStrategy": "dependency-depth with tests last",
+    "riskStrategy": "deterministic baseline from complexity, test coverage, fan-in, and cycles",
+    "llmContract": "Planning must preserve batch order and risk tiers unless it records an explicit exception."
+  },
+  "orderedPaths": [
+    "types/stylelint/index.d.ts",
+    "types/stylelint/type-test.ts",
+    "lib/utils/__tests__/fixtures/index.js"
+  ],
+  "batchPlan": [
+    {
+      "id": "batch-1",
+      "name": "Dependency depth 0",
+      "category": "code",
+      "parallelizable": true,
+      "dependsOn": [],
+      "files": [
+        {
+          "path": "types/stylelint/index.d.ts",
+          "riskTier": "human",
+          "dependencies": [],
+          "patterns": [
+            "public-api-types"
+          ],
+          "hasTests": false,
+          "dependencyDepth": 0
+        },
+        {
+          "path": "types/stylelint/type-test.ts",
+          "riskTier": "supervised",
+          "dependencies": [],
+          "patterns": [
+            "type-parity-test",
+            "esm-cjs-interop-check"
+          ],
+          "hasTests": false,
+          "dependencyDepth": 0
+        }
+      ]
+    },
+    {
+      "id": "batch-2",
+      "name": "Tests",
+      "category": "tests",
+      "parallelizable": true,
+      "dependsOn": [
+        "batch-1"
+      ],
+      "files": [
+        {
+          "path": "lib/utils/__tests__/fixtures/index.js",
+          "riskTier": "auto",
+          "dependencies": [],
+          "patterns": [
+            "test-file"
+          ],
+          "hasTests": true,
+          "dependencyDepth": "tests-last"
+        }
+      ]
+    }
+  ],
+  "riskAssignments": [
+    {
+      "path": "lib/utils/__tests__/fixtures/index.js",
+      "riskTier": "auto",
+      "reasons": [
+        "deterministic auto-tier baseline"
+      ],
+      "complexity": "low",
+      "hasTests": true,
+      "dependencyDepth": "tests-last"
+    },
+    {
+      "path": "types/stylelint/index.d.ts",
+      "riskTier": "human",
+      "reasons": [
+        "no direct test coverage",
+        "high complexity"
+      ],
+      "complexity": "high",
+      "hasTests": false,
+      "dependencyDepth": 0
+    },
+    {
+      "path": "types/stylelint/type-test.ts",
+      "riskTier": "supervised",
+      "reasons": [
+        "no direct test coverage"
+      ],
+      "complexity": "medium",
+      "hasTests": false,
+      "dependencyDepth": 0
+    }
+  ],
+  "humanReviewQueue": [
+    {
+      "path": "types/stylelint/index.d.ts",
+      "riskTier": "human",
+      "reasons": [
+        "no direct test coverage",
+        "high complexity"
+      ],
+      "complexity": "high",
+      "hasTests": false,
+      "dependencyDepth": 0
+    }
+  ],
+  "entryPoints": [],
+  "leafNodes": [
+    "lib/utils/__tests__/fixtures/index.js",
+    "types/stylelint/index.d.ts",
+    "types/stylelint/type-test.ts"
+  ],
+  "externalPackages": []
+}

@@ -1,0 +1,35 @@
+{
+  "status": "pass",
+  "reason": "",
+  "hooks": [
+    {
+      "name": "api-contract.sh",
+      "path": "/Users/thrishul.reddy/Open-Ai-/.codex/recipes/example-generic/verify/api-contract.sh",
+      "command": [
+        "bash",
+        "/Users/thrishul.reddy/Open-Ai-/.codex/recipes/example-generic/verify/api-contract.sh"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "stdout": "api-contract: target path present\n",
+      "stderr": ""
+    },
+    {
+      "name": "smoke.py",
+      "path": "/Users/thrishul.reddy/Open-Ai-/.codex/recipes/example-generic/verify/smoke.py",
+      "command": [
+        "/opt/homebrew/opt/python@3.14/bin/python3.14",
+        "/Users/thrishul.reddy/Open-Ai-/.codex/recipes/example-generic/verify/smoke.py"
+      ],
+      "status": "pass",
+      "exitCode": 0,
+      "stdout": "smoke: source, target, and recipe root present\n",
+      "stderr": ""
+    }
+  ],
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0
+  }
+}
