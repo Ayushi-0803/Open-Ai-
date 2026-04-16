@@ -1,0 +1,41 @@
+{
+  "name": "example-generic",
+  "version": "0.1.0",
+  "description": "Minimal sample recipe for exercising the Codex migration framework end-to-end.",
+  "source": {
+    "language": "generic",
+    "framework": "generic"
+  },
+  "target": {
+    "language": "generic",
+    "framework": "generic"
+  },
+  "tier": "auto",
+  "domains": [
+    {
+      "name": "core",
+      "patterns_file": "patterns/core.patterns.json",
+      "priority": 1
+    }
+  ],
+  "domain_ordering": {
+    "core": []
+  },
+  "foundation": {
+    "ast_tool": "builtin:generic-tier2-foundation"
+  },
+  "verification": {
+    "custom_checks": [
+      {
+        "name": "api-contract",
+        "command": "bash verify/api-contract.sh",
+        "required": false
+      },
+      {
+        "name": "smoke",
+        "command": "python3 verify/smoke.py",
+        "required": false
+      }
+    ]
+  }
+}

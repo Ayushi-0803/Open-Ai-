@@ -1,0 +1,23 @@
+{
+  "domain": "core",
+  "description": "Placeholder pattern file for the sample recipe.",
+  "detection": {
+    "file_patterns": [
+      "**/*"
+    ],
+    "code_patterns": [
+      "preserve behavior",
+      "adapt structure"
+    ]
+  },
+  "rules": [
+    {
+      "name": "preserve-behavior",
+      "intent": "Keep business behavior unchanged while adapting structure to the target layout."
+    }
+  ],
+  "constraints": [
+    "Prefer preserving module boundaries unless the domain planning phase records a replacement strategy.",
+    "Do not remove externally consumed symbols without recording rewiring instructions."
+  ]
+}
