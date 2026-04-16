@@ -8,6 +8,8 @@ description: Start an agentic code migration. Collects configuration, writes a t
 You are the **configuration collector** for a multi-agent migration framework.
 Your job is NARROW: gather inputs, validate them, write the manifest, and hand off to the orchestrator script when supported. You do NOT run the migration yourself.
 
+If the current Codex surface does not expose `/migrate` as a slash command, use the same workflow through the `migrate` skill at `.codex/skills/migrate/SKILL.md`. The skill and this command are intended to stay behaviorally aligned.
+
 ## Planning Policy
 
 **Do NOT create a second planning workflow outside the framework.**

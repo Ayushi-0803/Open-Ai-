@@ -177,10 +177,22 @@ def validate_domain_discovery(output_dir: Path, errors: list[str]):
         if not isinstance(domain, dict):
             errors.append("domain-discovery-overview.json domains entries must be objects")
             continue
-        for key in ("discoveryJson", "summaryMd"):
+        for key in ("name", "discoveryJson", "summaryMd"):
             value = domain.get(key)
-            if not isinstance(value, str) or not Path(value).exists():
+            if key == "name" and not isinstance(value, str):
                 errors.append(f"domain discovery entry missing valid {key}: {domain}")
+                continue
+            if key != "name" and (not isinstance(value, str) or not Path(value).exists()):
+                errors.append(f"domain discovery entry missing valid {key}: {domain}")
+        discovery_json = domain.get("discoveryJson")
+        if isinstance(discovery_json, str) and Path(discovery_json).exists():
+            payload = load_json(Path(discovery_json))
+            if not isinstance(payload.get("ownedFiles"), list):
+                errors.append(f"{discovery_json} must contain an 'ownedFiles' array")
+            if not isinstance(payload.get("ownedSymbols"), list):
+                errors.append(f"{discovery_json} must contain an 'ownedSymbols' array")
+            if not isinstance(payload.get("summary"), dict):
+                errors.append(f"{discovery_json} must contain a 'summary' object")
 
 
 def validate_conflict_resolution(output_dir: Path, errors: list[str]):
@@ -192,6 +204,9 @@ def validate_conflict_resolution(output_dir: Path, errors: list[str]):
     payload = load_json(output_dir / "conflict-resolution.json")
     if "status" not in payload:
         errors.append("conflict-resolution.json must contain a 'status' field")
+    for key in ("resolved", "shared", "unresolved"):
+        if not isinstance(payload.get(key), list):
+            errors.append(f"conflict-resolution.json must contain a '{key}' array")
 
 
 def validate_domain_planning(output_dir: Path, errors: list[str]):
@@ -209,10 +224,28 @@ def validate_domain_planning(output_dir: Path, errors: list[str]):
         if not isinstance(domain, dict):
             errors.append("domain-plan-overview.json domains entries must be objects")
             continue
-        for key in ("decoupledFilesPath", "rewiringImportsPath", "agentsPath", "summaryMd"):
+        for key in ("name", "executionOrder", "decoupledFilesPath", "rewiringImportsPath", "agentsPath", "summaryMd"):
             value = domain.get(key)
-            if not isinstance(value, str) or not Path(value).exists():
+            if key == "name" and not isinstance(value, str):
                 errors.append(f"domain planning entry missing valid {key}: {domain}")
+                continue
+            if key == "executionOrder" and not isinstance(value, int):
+                errors.append(f"domain planning entry missing valid {key}: {domain}")
+                continue
+            if key not in {"name", "executionOrder"} and (not isinstance(value, str) or not Path(value).exists()):
+                errors.append(f"domain planning entry missing valid {key}: {domain}")
+        decoupled_path = domain.get("decoupledFilesPath")
+        if isinstance(decoupled_path, str) and Path(decoupled_path).exists():
+            payload = load_json(Path(decoupled_path))
+            if not isinstance(payload.get("ownedFiles"), list):
+                errors.append(f"{decoupled_path} must contain an 'ownedFiles' array")
+            if not isinstance(payload.get("summary"), dict):
+                errors.append(f"{decoupled_path} must contain a 'summary' object")
+        rewiring_path = domain.get("rewiringImportsPath")
+        if isinstance(rewiring_path, str) and Path(rewiring_path).exists():
+            payload = load_json(Path(rewiring_path))
+            if not isinstance(payload.get("plannedImports"), list):
+                errors.append(f"{rewiring_path} must contain a 'plannedImports' array")
 
 
 def validate_domain_execution(output_dir: Path, errors: list[str]):
@@ -230,10 +263,20 @@ def validate_domain_execution(output_dir: Path, errors: list[str]):
         if not isinstance(domain, dict):
             errors.append("domain-execution-overview.json domains entries must be objects")
             continue
-        for key in ("executionJson", "summaryMd"):
+        for key in ("name", "status", "executionJson", "summaryMd"):
             value = domain.get(key)
-            if not isinstance(value, str) or not Path(value).exists():
+            if key in {"name", "status"} and not isinstance(value, str):
                 errors.append(f"domain execution entry missing valid {key}: {domain}")
+                continue
+            if key not in {"name", "status"} and (not isinstance(value, str) or not Path(value).exists()):
+                errors.append(f"domain execution entry missing valid {key}: {domain}")
+        execution_json = domain.get("executionJson")
+        if isinstance(execution_json, str) and Path(execution_json).exists():
+            payload = load_json(Path(execution_json))
+            if not isinstance(payload.get("files"), list):
+                errors.append(f"{execution_json} must contain a 'files' array")
+            if not isinstance(payload.get("summary"), dict):
+                errors.append(f"{execution_json} must contain a 'summary' object")
 
 
 def validate_rewiring(output_dir: Path, errors: list[str]):
@@ -245,6 +288,11 @@ def validate_rewiring(output_dir: Path, errors: list[str]):
     payload = load_json(output_dir / "rewiring-batches.json")
     if not isinstance(payload.get("batches"), list) or not payload["batches"]:
         errors.append("rewiring-batches.json must contain a non-empty 'batches' array")
+    if not isinstance(payload.get("globalRewriteMap"), list):
+        errors.append("rewiring-batches.json must contain a 'globalRewriteMap' array")
+    summary = load_json(output_dir / "rewiring-summary.json")
+    if "status" not in summary:
+        errors.append("rewiring-summary.json must contain a 'status' field")
 
 
 def validate_integration_review(output_dir: Path, errors: list[str]):
@@ -256,6 +304,15 @@ def validate_integration_review(output_dir: Path, errors: list[str]):
     payload = load_json(output_dir / "integration-review.json")
     if not isinstance(payload.get("checks"), list) or not payload["checks"]:
         errors.append("integration-review.json must contain a non-empty 'checks' array")
+    routing = payload.get("routing")
+    if not isinstance(routing, dict):
+        errors.append("integration-review.json must contain a 'routing' object")
+    else:
+        for key in ("pass", "fail", "human"):
+            if not isinstance(routing.get(key), list):
+                errors.append(f"integration-review.json routing must contain a '{key}' array")
+    if not isinstance(payload.get("summary"), dict):
+        errors.append("integration-review.json must contain a 'summary' object")
 
 
 VALIDATORS = {

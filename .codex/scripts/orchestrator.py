@@ -2321,6 +2321,13 @@ POLL_INTERVAL = int(os.environ.get("MIGRATION_POLL_INTERVAL", "15"))
 FRAMEWORK_DIR = Path(__file__).parent.parent
 DISCOVERY_BUILDER = FRAMEWORK_DIR / "scripts" / "discovery_builder.py"
 FOUNDATION_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_foundation_builder.py"
+TIER2_MODULE_DISCOVERY_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_module_discovery_builder.py"
+TIER2_DOMAIN_DISCOVERY_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_domain_discovery_builder.py"
+TIER2_CONFLICT_RESOLUTION_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_conflict_resolution_builder.py"
+TIER2_DOMAIN_PLANNING_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_domain_planning_builder.py"
+TIER2_DOMAIN_EXECUTION_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_domain_execution_builder.py"
+TIER2_REWIRING_BUILDER = FRAMEWORK_DIR / "scripts" / "tier2_rewiring_builder.py"
+TIER2_INTEGRATION_CHECKER = FRAMEWORK_DIR / "scripts" / "tier2_integration_checker.py"
 PLANNING_BUILDER = FRAMEWORK_DIR / "scripts" / "planning_builder.py"
 RECIPE_VERIFY_RUNNER = FRAMEWORK_DIR / "scripts" / "recipe_verify_runner.py"
 ARTIFACT_VALIDATOR = FRAMEWORK_DIR / "scripts" / "validate_artifacts.py"
@@ -2581,6 +2588,31 @@ def run_recipe_verify_if_available(manifest_path: str, context: dict, output_dir
         return json.loads(parity_results_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"invalid parity-results.json: {exc}") from exc
+
+
+def run_python_builder(manifest_path: str, label: str, script_path: Path, cmd_args: list[str]) -> tuple[bool, str]:
+    if not script_path.exists():
+        return True, ""
+    log_and_print(manifest_path, f"  → {label}...")
+    cmd = [sys.executable, str(script_path), *cmd_args]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.stdout.strip():
+        log_and_print(manifest_path, f"    {result.stdout.strip()}")
+    if result.returncode != 0:
+        error_msg = result.stderr.strip() or result.stdout.strip() or f"{label} failed"
+        log_and_print(manifest_path, f"  ✗ {label} failed: {error_msg}")
+        return False, error_msg
+    return True, ""
+
+
+def collect_overview_domain_artifacts(overview_path: Path) -> list[dict]:
+    if not overview_path.exists():
+        return []
+    try:
+        overview = json.loads(overview_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    return [item for item in overview.get("domains", []) if isinstance(item, dict)]
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2886,12 +2918,15 @@ def collect_phase_artifacts(phase_name: str, output_dir: str) -> dict:
         artifacts["moduleDiscovery"] = str(output_path / "module-discovery.json")
     elif phase_name == "domain_discovery":
         artifacts["domainDiscoveryOverview"] = str(output_path / "domain-discovery-overview.json")
+        artifacts["domains"] = collect_overview_domain_artifacts(output_path / "domain-discovery-overview.json")
     elif phase_name == "conflict_resolution":
         artifacts["conflictResolution"] = str(output_path / "conflict-resolution.json")
     elif phase_name == "domain_planning":
         artifacts["domainPlanOverview"] = str(output_path / "domain-plan-overview.json")
+        artifacts["domains"] = collect_overview_domain_artifacts(output_path / "domain-plan-overview.json")
     elif phase_name == "domain_execution":
         artifacts["domainExecutionOverview"] = str(output_path / "domain-execution-overview.json")
+        artifacts["domains"] = collect_overview_domain_artifacts(output_path / "domain-execution-overview.json")
     elif phase_name == "rewiring":
         artifacts["rewiringSummary"] = str(output_path / "rewiring-summary.json")
         artifacts["rewiringBatches"] = str(output_path / "rewiring-batches.json")
@@ -2959,53 +2994,95 @@ def run_phase(manifest_path: str, phase_config: dict,
         if os.path.exists(stale_path):
             os.remove(stale_path)
 
-    if phase_name == "foundation" and FOUNDATION_BUILDER.exists():
-        log_and_print(manifest_path, "  → Building deterministic Tier 2 foundation artifacts...")
-        foundation_cmd = [
-            sys.executable,
-            str(FOUNDATION_BUILDER),
-            context["source_path"],
-            output_dir,
-        ]
-        foundation_result = subprocess.run(foundation_cmd, capture_output=True, text=True)
-        if foundation_result.stdout.strip():
-            log_and_print(manifest_path, f"    {foundation_result.stdout.strip()}")
-        if foundation_result.returncode != 0:
-            error_msg = foundation_result.stderr.strip() or foundation_result.stdout.strip() or "foundation builder failed"
-            log_and_print(manifest_path, f"  ✗ deterministic foundation failed: {error_msg}")
+    if phase_name == "foundation":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 foundation artifacts",
+            FOUNDATION_BUILDER,
+            [context["source_path"], output_dir],
+        )
+        if not ok:
             mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
             return False
-    if phase_name == "discovery" and DISCOVERY_BUILDER.exists():
-        log_and_print(manifest_path, "  → Building deterministic discovery artifacts...")
-        discovery_cmd = [
-            sys.executable,
-            str(DISCOVERY_BUILDER),
-            context["source_path"],
-            output_dir,
-        ]
-        discovery_result = subprocess.run(discovery_cmd, capture_output=True, text=True)
-        if discovery_result.stdout.strip():
-            log_and_print(manifest_path, f"    {discovery_result.stdout.strip()}")
-        if discovery_result.returncode != 0:
-            error_msg = discovery_result.stderr.strip() or discovery_result.stdout.strip() or "discovery builder failed"
-            log_and_print(manifest_path, f"  ✗ deterministic discovery failed: {error_msg}")
+    if phase_name == "discovery":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic discovery artifacts",
+            DISCOVERY_BUILDER,
+            [context["source_path"], output_dir],
+        )
+        if not ok:
             mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
             return False
-    if phase_name == "planning" and PLANNING_BUILDER.exists():
+    if phase_name == "planning":
         discovery_dir = str(Path(sd) / "discovery")
-        log_and_print(manifest_path, "  → Building deterministic planning inputs...")
-        planning_cmd = [
-            sys.executable,
-            str(PLANNING_BUILDER),
-            discovery_dir,
-            output_dir,
-        ]
-        planning_result = subprocess.run(planning_cmd, capture_output=True, text=True)
-        if planning_result.stdout.strip():
-            log_and_print(manifest_path, f"    {planning_result.stdout.strip()}")
-        if planning_result.returncode != 0:
-            error_msg = planning_result.stderr.strip() or planning_result.stdout.strip() or "planning builder failed"
-            log_and_print(manifest_path, f"  ✗ deterministic planning failed: {error_msg}")
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic planning inputs",
+            PLANNING_BUILDER,
+            [discovery_dir, output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "module_discovery":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 module discovery artifacts",
+            TIER2_MODULE_DISCOVERY_BUILDER,
+            [phase_output_dir(sd, "foundation"), output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "domain_discovery":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 domain discovery artifacts",
+            TIER2_DOMAIN_DISCOVERY_BUILDER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "conflict_resolution":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 conflict resolution artifacts",
+            TIER2_CONFLICT_RESOLUTION_BUILDER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "domain_planning":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 domain planning artifacts",
+            TIER2_DOMAIN_PLANNING_BUILDER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "domain_execution":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 domain execution artifacts",
+            TIER2_DOMAIN_EXECUTION_BUILDER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "rewiring":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 rewiring artifacts",
+            TIER2_REWIRING_BUILDER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
             mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
             return False
     if phase_name in {"review", "integration_review"} and RECIPE_VERIFY_RUNNER.exists():
@@ -3019,6 +3096,16 @@ def run_phase(manifest_path: str, phase_config: dict,
         except RuntimeError as exc:
             error_msg = str(exc)
             log_and_print(manifest_path, f"  ✗ deterministic recipe verification failed: {error_msg}")
+            mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
+            return False
+    if phase_name == "integration_review":
+        ok, error_msg = run_python_builder(
+            manifest_path,
+            "Building deterministic Tier 2 integration review checks",
+            TIER2_INTEGRATION_CHECKER,
+            [manifest_path, output_dir],
+        )
+        if not ok:
             mf.update_phase(manifest_path, phase_name, "failed", extra={"error": error_msg})
             return False
 
@@ -3068,10 +3155,10 @@ def run_phase(manifest_path: str, phase_config: dict,
     # The agent may have written files even if exit code is non-zero.
     # Check the filesystem for the definitive success marker.
 
-    if all(os.path.exists(os.path.join(output_dir, marker)) for marker in SUCCESS_MARKERS.get(phase_name, [success_marker])):
-        status = "success"
-    elif os.path.exists(error_path):
+    if os.path.exists(error_path):
         status = "failure"
+    elif all(os.path.exists(os.path.join(output_dir, marker)) for marker in SUCCESS_MARKERS.get(phase_name, [success_marker])):
+        status = "success"
     elif result["exit_code"] != 0:
         # Agent crashed without writing ERROR file — create one
         with open(error_path, 'w') as f:

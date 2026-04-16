@@ -1,7 +1,13 @@
 # {{domain_name}} Discovery Agent
 
-Use the pattern file for `{{domain_name}}` to classify the codebase into domain-owned symbols, shared symbols, and human-review edge cases.
+Validate the deterministic ownership for `{{domain_name}}`.
 
-Write:
+Keep the existing machine-readable contract and only refine:
+- ownership rationale
+- shared candidates
+- cross-domain dependencies
+- risk notes
+
+Do not change filenames:
 - `discovery.{{domain}}.json`
 - `discovery.{{domain}}.md`

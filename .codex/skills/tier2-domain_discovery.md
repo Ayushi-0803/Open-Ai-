@@ -5,6 +5,16 @@ description: Tier 2 domain discovery phase agent. Classifies symbols into domain
 
 # Tier 2 Domain Discovery Agent
 
+## Deterministic First
+
+The orchestrator prebuilds:
+- `{output_dir}/domain-discovery-overview.json`
+- `{output_dir}/DOMAIN_DISCOVERY.md`
+- `{output_dir}/<domain>/discovery/discovery.<domain>.json`
+- `{output_dir}/<domain>/discovery/discovery.<domain>.md`
+
+Use those files as the baseline. Repair or enrich them in place. Do not invent different filenames.
+
 ## Inputs
 
 Read from context:
@@ -23,30 +33,76 @@ Read from context:
 
 ## Task
 
-Classify the codebase into the configured domains.
+1. Check each domain’s prebuilt ownership claims against the deterministic foundation.
+2. Tighten borderline ownership cases, rationale, and risk notes.
+3. Preserve overview paths and directory layout.
+4. Keep discovery JSONs aligned with `domain-discovery-overview.json`.
 
-Use all available evidence:
-- deterministic foundation artifacts
-- module discovery summary
-- recipe pattern files when present
-- actual source files when needed
+## Required Per-Domain JSON Contract
 
-For each domain, create `{output_dir}/<domain>/discovery/` and write:
-- `discovery.<domain>.json`
-- `discovery.<domain>.md`
+Each `discovery.<domain>.json` must remain:
 
-The JSON should include discovered symbols/files, rationale, shared/internal classification where possible, and notable risks.
+```json
+{
+  "domain": "string",
+  "summary": {
+    "ownedFileCount": 0,
+    "sharedCandidateCount": 0,
+    "ownedSymbolCount": 0,
+    "crossDomainDependencyCount": 0
+  },
+  "ownedFiles": ["string"],
+  "ownedSymbols": [
+    {
+      "symbol": "string",
+      "path": "string",
+      "complexity": "string"
+    }
+  ],
+  "sharedCandidates": ["string"],
+  "crossDomainDependencies": [
+    {
+      "targetDomain": "string",
+      "paths": ["string"]
+    }
+  ],
+  "rationale": [
+    {
+      "path": "string",
+      "reasons": ["string"]
+    }
+  ],
+  "risks": ["string"]
+}
+```
 
-Then write the combined artifacts in `{output_dir}/`:
+## Required Overview Contract
 
-1. `domain-discovery-overview.json`
-   Required:
-   - `domains`: non-empty array
-   - each entry includes `name`, `symbolCount`, `discoveryJson`, `summaryMd`
+`domain-discovery-overview.json` must remain:
 
-2. `DOMAIN_DISCOVERY.md`
-   Summarize coverage, gaps, and domain boundaries.
+```json
+{
+  "summary": {
+    "totalDomains": 0,
+    "totalClaimedFiles": 0,
+    "sharedFileCount": 0
+  },
+  "domains": [
+    {
+      "name": "string",
+      "symbolCount": 0,
+      "fileCount": 0,
+      "sharedCandidateCount": 0,
+      "discoveryJson": "/abs/path",
+      "summaryMd": "/abs/path"
+    }
+  ]
+}
+```
 
-Update `symbol-registry.json` if you can do so cleanly; otherwise record unresolved ownership questions in the overview.
+## Output Rules
 
-If blocked, write `{output_dir}/ERROR`.
+- Never remove a configured domain from the overview without replacing it with a truthful empty-domain artifact.
+- Preserve absolute paths in overview JSON.
+- Keep markdown concise and approval-oriented.
+- If blocked, write `{output_dir}/ERROR`.

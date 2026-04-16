@@ -5,6 +5,15 @@ description: Tier 2 rewiring phase agent. Aggregates domain rewiring instruction
 
 # Tier 2 Rewiring Agent
 
+## Deterministic First
+
+The orchestrator prebuilds:
+- `{output_dir}/rewiring-batches.json`
+- `{output_dir}/rewiring-summary.json`
+- `{output_dir}/REWIRING.md`
+
+Edit those files in place. Keep the same top-level keys.
+
 ## Inputs
 
 Read from context:
@@ -17,21 +26,70 @@ Read from context:
 
 ## Task
 
-Aggregate all per-domain rewiring instructions into a deterministic rewrite plan and apply safe rewrites to the generated target files.
+1. Review the deterministic rewiring aggregation.
+2. Apply only safe, clearly justified rewrites.
+3. Record skipped or risky rewrites explicitly.
 
-## Outputs
+## Required Contracts
 
-Write to `{output_dir}/`:
+`rewiring-batches.json` must contain:
 
-1. `rewiring-batches.json`
-   Required:
-   - `batches`: non-empty array
-   - include a global rewrite map and file assignments
+```json
+{
+  "summary": {
+    "totalBatches": 0,
+    "safeRewriteCandidates": 0,
+    "appliedRewriteCount": 0,
+    "manualReviewCount": 0
+  },
+  "globalRewriteMap": [
+    {
+      "domain": "string",
+      "sourcePath": "string",
+      "dependencyPath": "string",
+      "dependencyDomain": "string",
+      "resolvedTargetFile": "string|null",
+      "resolvedDependencyTarget": "string|null",
+      "safeRewrite": false
+    }
+  ],
+  "batches": [
+    {
+      "id": "string",
+      "domain": "string",
+      "targetFile": "string|null",
+      "dependencyTarget": "string|null",
+      "status": "ready|manual-review",
+      "rewrite": {}
+    }
+  ]
+}
+```
 
-2. `rewiring-summary.json`
-   Summary of rewrites applied, skipped, and remaining manual work.
+`rewiring-summary.json` must contain:
 
-3. `REWIRING.md`
-   Human-readable approval summary.
+```json
+{
+  "status": "ready|needs-review",
+  "appliedEdits": [
+    {
+      "targetFile": "string",
+      "from": "string",
+      "to": "string"
+    }
+  ],
+  "remainingManualWork": [
+    {
+      "sourcePath": "string",
+      "dependencyPath": "string",
+      "reason": "string"
+    }
+  ]
+}
+```
 
-If blocked, write `{output_dir}/ERROR`.
+## Output Rules
+
+- Keep applied edits and manual work mutually understandable.
+- Do not mark a rewrite safe unless the target mapping is unambiguous.
+- If blocked, write `{output_dir}/ERROR`.

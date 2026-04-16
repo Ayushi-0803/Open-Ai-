@@ -1,0 +1,36 @@
+{
+  "domain": "interface",
+  "description": "HTTP, CLI, and entrypoint-facing surface area.",
+  "detection": {
+    "file_patterns": [
+      "**/api/**",
+      "**/routes/**",
+      "**/handlers/**",
+      "**/interface/**"
+    ],
+    "path_hints": [
+      "route",
+      "handler",
+      "interface",
+      "api"
+    ],
+    "code_patterns": [
+      "Router",
+      "Handler"
+    ],
+    "signals": [
+      "handler",
+      "fastapi-router"
+    ]
+  },
+  "rules": [
+    {
+      "name": "preserve-entrypoints",
+      "intent": "Keep externally visible entrypoints stable while internal structure changes."
+    }
+  ],
+  "constraints": [
+    "Prefer rewiring dependencies beneath the interface layer rather than collapsing the layer into core.",
+    "Record changed call edges explicitly in rewiring imports."
+  ]
+}

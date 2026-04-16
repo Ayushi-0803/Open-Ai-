@@ -1,13 +1,27 @@
 {
   "domain": "core",
-  "description": "Placeholder pattern file for the sample recipe.",
+  "description": "Core business logic and shared domain models.",
   "detection": {
     "file_patterns": [
-      "**/*"
+      "**/core/**",
+      "**/domain/**",
+      "**/models/**",
+      "**/service*.py",
+      "**/services/**"
+    ],
+    "path_hints": [
+      "core",
+      "domain",
+      "model",
+      "service"
     ],
     "code_patterns": [
-      "preserve behavior",
-      "adapt structure"
+      "Service",
+      "Model"
+    ],
+    "signals": [
+      "pydantic-model",
+      "sqlalchemy-model"
     ]
   },
   "rules": [
@@ -17,7 +31,8 @@
     }
   ],
   "constraints": [
-    "Prefer preserving module boundaries unless the domain planning phase records a replacement strategy.",
-    "Do not remove externally consumed symbols without recording rewiring instructions."
+    "Prefer preserving business invariants and state transitions.",
+    "Do not remove externally consumed symbols without recording rewiring instructions.",
+    "Treat shared models as core-owned unless conflict resolution overrides that ownership."
   ]
 }

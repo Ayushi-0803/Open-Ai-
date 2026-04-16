@@ -1,5 +1,12 @@
 # {{domain_name}} Execution Agent
 
-Execute the domain plan in dependency-safe order and write:
+Update the prebuilt execution ledger for `{{domain_name}}`.
+
+Required behavior:
+- keep `execution.{{domain}}.json` valid JSON
+- record file-level status changes truthfully
+- record blocked work instead of silently skipping
+
+Do not change filenames:
 - `execution.{{domain}}.json`
 - `execution.{{domain}}.md`
