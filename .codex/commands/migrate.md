@@ -10,6 +10,8 @@ Your job is NARROW: gather inputs, validate them, write the manifest, and hand o
 
 If the current Codex surface does not expose `/migrate` as a slash command, use the same workflow through the `migrate` skill at `.codex/skills/migrate/SKILL.md`. The skill and this command are intended to stay behaviorally aligned.
 
+If `.codex/scripts/migrate_wizard.py` exists and the user is starting a new migration, prefer running it in a TTY first. The wizard is the terminal intake path for source/target metadata and non-negotiables, including repo style-guide and naming-convention selection.
+
 ## Planning Policy
 
 **Do NOT create a second planning workflow outside the framework.**
@@ -76,6 +78,12 @@ Gather the following from the user. If they've already provided some in their me
 - Any libraries/SDKs that must be used?
 - Any architectural patterns that must be preserved?
 - Anything that should NOT be changed during migration?
+
+When intake is happening through `.codex/scripts/migrate_wizard.py`, offer:
+- repo style guides discovered under `styleguide/<language>/`
+- naming conventions from the corresponding naming section when available
+- a custom style-guide path
+- custom free-form style or naming rules
 
 **venv / package managers:**
 The orchestrator scripts use only Python stdlib — no venv needed to run the framework itself.

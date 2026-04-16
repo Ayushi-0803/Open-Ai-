@@ -21,6 +21,8 @@ Use it when the user says things like:
 
 Do not depend on `/migrate` slash-command discovery. If slash commands are unavailable in the current Codex surface, this skill is still the supported workflow entry point.
 
+If `.codex/scripts/migrate_wizard.py` exists and the user is starting a new migration, prefer running it in a TTY first. The wizard is the source of truth for terminal intake, including style-guide selection from `styleguide/` and naming-convention selection from the matching section files.
+
 ## Planning Policy
 
 Do not create a second planning workflow outside the framework.
@@ -85,6 +87,12 @@ If non-negotiables are missing, ask specifically for:
 - required libraries or SDKs
 - architectural patterns that must be preserved
 - anything that must not change during migration
+
+When collecting non-negotiables through the terminal wizard, present:
+- repo style-guide presets discovered under `styleguide/<language>/`
+- naming-convention presets from the corresponding naming section when available
+- custom style-guide path input
+- custom free-form style or naming rules
 
 The framework scripts use only Python stdlib. No venv is needed to run the framework itself. For `testCommand` and `buildCommand`, bake in activation if the target project needs it.
 
