@@ -33,6 +33,7 @@ REPO_ROOT = FRAMEWORK_DIR.parent
 STYLEGUIDE_DIR = REPO_ROOT / "styleguide"
 RECIPE_DIR = FRAMEWORK_DIR / "recipes"
 ORCHESTRATOR_PATH = FRAMEWORK_DIR / "scripts" / "orchestrator.py"
+IMPORTS_ROOT = REPO_ROOT / "experiments" / "imported-sources"
 RECIPE_MANIFEST_NAMES = ("recipe.yaml", "recipe.yml", "recipe.json")
 
 TIER1_PHASES = ["discovery", "planning", "execution", "review", "reiterate"]
@@ -80,6 +81,14 @@ class StyleGuideOption:
     style_path: str
     naming_path: str | None
     naming_preview: list[str]
+
+
+@dataclass(frozen=True)
+class SourceSetup:
+    source_path: Path
+    default_target_path: Path
+    origin: str | None
+    import_mode: str | None
 
 
 def repo_relative(path: Path) -> str:
@@ -161,6 +170,116 @@ def discover_style_guides(styleguide_root: Path = STYLEGUIDE_DIR) -> list[StyleG
             )
         )
     return options
+
+
+def is_path_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def looks_like_git_url(value: str) -> bool:
+    raw = value.strip()
+    if not raw:
+        return False
+    if raw.startswith(("http://", "https://", "ssh://", "git://", "git@")):
+        return True
+    if raw.endswith(".git"):
+        return True
+    return False
+
+
+def slugify_source_name(value: str) -> str:
+    normalized = value.strip().rstrip("/").replace("\\", "/")
+    tail = normalized.split("/")[-1] if normalized else "source"
+    if ":" in tail:
+        tail = tail.split(":")[-1]
+    if tail.endswith(".git"):
+        tail = tail[:-4]
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", tail).strip("-._")
+    return slug or "source"
+
+
+def next_available_path(base: Path) -> Path:
+    if not base.exists():
+        return base
+    for index in range(2, 1000):
+        candidate = base.parent / f"{base.name}-{index}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError(f"Could not find an available path for {base}")
+
+
+def copy_source_tree(source: Path, destination: Path):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        source,
+        destination,
+        symlinks=True,
+        dirs_exist_ok=False,
+        ignore=shutil.ignore_patterns(".git"),
+    )
+
+
+def clone_source_repo(source_url: str, destination: Path):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        ["git", "clone", "--depth", "1", source_url, str(destination)],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error = result.stderr.strip() or result.stdout.strip() or "git clone failed"
+        raise RuntimeError(error)
+
+
+def import_source_into_workspace(source_value: str, mode: str) -> SourceSetup:
+    slug = slugify_source_name(source_value)
+    experiment_dir = next_available_path(IMPORTS_ROOT / slug)
+    imported_source = experiment_dir / "source"
+
+    if mode == "copy":
+        source_path = Path(source_value).expanduser().resolve()
+        copy_source_tree(source_path, imported_source)
+    elif mode == "git-clone":
+        clone_source_repo(source_value, imported_source)
+    else:
+        raise ValueError(f"Unsupported import mode: {mode}")
+
+    return SourceSetup(
+        source_path=imported_source.resolve(),
+        default_target_path=(experiment_dir / "migrated").resolve(),
+        origin=source_value,
+        import_mode=mode,
+    )
+
+
+def resolve_source_setup(source_value: str) -> SourceSetup:
+    if looks_like_git_url(source_value):
+        return import_source_into_workspace(source_value, "git-clone")
+
+    source_path = Path(source_value).expanduser()
+    if not source_path.exists():
+        return SourceSetup(
+            source_path=source_path.resolve(),
+            default_target_path=(source_path.resolve().parent / f"{source_path.name}-migrated").resolve(),
+            origin=None,
+            import_mode=None,
+        )
+
+    resolved = source_path.resolve()
+    if is_path_within(resolved, REPO_ROOT):
+        return SourceSetup(
+            source_path=resolved,
+            default_target_path=(resolved.parent / f"{resolved.name}-migrated").resolve(),
+            origin=None,
+            import_mode=None,
+        )
+
+    return import_source_into_workspace(str(resolved), "copy")
 
 
 def format_sentence(text: str, prefix: str | None = None) -> str:
@@ -457,6 +576,10 @@ def build_manifest(config: dict) -> dict:
 
     if config.get("recipePath"):
         meta["recipePath"] = config["recipePath"]
+    if config.get("sourceOrigin"):
+        meta["sourceOrigin"] = config["sourceOrigin"]
+    if config.get("sourceImportMode"):
+        meta["sourceImportMode"] = config["sourceImportMode"]
     if config.get("domains"):
         meta["domains"] = config["domains"]
     if config.get("domainOrdering"):
@@ -523,6 +646,8 @@ def print_summary(manifest_data: dict):
     print("\nMigration Summary")
     print(f"  Source:   {meta['sourceDescription']}")
     print(f"            {meta['sourcePath']}")
+    if meta.get("sourceOrigin"):
+        print(f"  Imported: {meta['sourceImportMode']} from {meta['sourceOrigin']}")
     print(f"  Target:   {meta['targetDescription']}")
     print(f"            {meta['targetPath']}")
     print(f"  Recipe:   {meta['recipe']}")
@@ -582,6 +707,7 @@ def launch_orchestrator(manifest_path: Path, runtime: str | None = None, model: 
         process = subprocess.Popen(
             cmd,
             cwd=REPO_ROOT,
+            stdin=subprocess.DEVNULL,
             stdout=handle,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -686,9 +812,15 @@ def collect_inputs(args: argparse.Namespace, input_fn: Callable[[str], str] = in
 
     recipe_ids = available_recipe_ids()
     default_recipe = args.recipe or (recipe_ids[0] if len(recipe_ids) == 1 else None)
-    source_path_value = prompt_text("Source path", args.source_path, required=True, input_fn=input_fn)
-    source_path = Path(source_path_value).expanduser().resolve()
-    default_target_path = args.target_path or str(source_path.parent / f"{source_path.name}-migrated")
+    source_path_value = prompt_text("Source path or git URL", args.source_path, required=True, input_fn=input_fn)
+    try:
+        source_setup = resolve_source_setup(source_path_value)
+    except Exception as exc:
+        raise RuntimeError(f"Could not prepare source input '{source_path_value}': {exc}") from exc
+    source_path = source_setup.source_path
+    default_target_path = args.target_path or str(source_setup.default_target_path)
+    if source_setup.import_mode:
+        print(f"Imported source into workspace: {source_path}")
     source_description = prompt_text("Source description", args.source_description, required=True, input_fn=input_fn)
     target_description = prompt_text("Target description", args.target_description, required=True, input_fn=input_fn)
     target_path = prompt_text("Target path", default_target_path, required=True, input_fn=input_fn)
@@ -714,6 +846,8 @@ def collect_inputs(args: argparse.Namespace, input_fn: Callable[[str], str] = in
         "targetDescription": target_description,
         "sourcePath": str(source_path),
         "targetPath": target_path,
+        "sourceOrigin": source_setup.origin,
+        "sourceImportMode": source_setup.import_mode,
         "recipeInput": recipe_input,
         "referencePath": reference_path or None,
         "testCommand": test_command or None,
@@ -807,7 +941,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
-    config = collect_inputs(args)
+    try:
+        config = collect_inputs(args)
+    except RuntimeError as exc:
+        print(f"Setup failed: {exc}")
+        return 1
 
     errors = validate_paths(config)
     if errors:

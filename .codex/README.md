@@ -18,5 +18,9 @@ Canonical migration entry points:
 - terminal wizard: `.codex/scripts/migrate_wizard.py`
 - runtime: `.codex/scripts/orchestrator.py`
 
+The wizard can import an external local project into `experiments/imported-sources/`
+or clone a git URL there before writing the manifest. That keeps the migration
+run inside the repo workspace and reduces follow-up permission prompts.
+
 Post-migration testing helper:
 - skill: `.codex/skills/test-migrations/SKILL.md` to run target project tests using manifest-provided commands and capture artifacts under `artifacts/test-runs/`.

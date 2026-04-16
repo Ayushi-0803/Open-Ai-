@@ -51,7 +51,7 @@ Most of the framework lives under `.codex/`.
 7. Provide the migration inputs when prompted:
    - source description
    - target description
-   - source path
+   - source path or git URL
    - target path
    - recipe id or recipe path
    - optional reference path
@@ -59,6 +59,10 @@ Most of the framework lives under `.codex/`.
    - non-negotiables
      - choose a repo style guide from `styleguide/` or provide a custom one
      - choose naming conventions from the selected style guide or provide custom rules
+
+   If the source project lives outside this workspace, the wizard can import it
+   into `experiments/imported-sources/` first so the migration runs locally
+   without repeated permission prompts. Git URLs are cloned there.
 
 8. Review the generated summary, confirm launch, and approve gated phases as the workflow progresses.
 

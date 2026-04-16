@@ -86,6 +86,8 @@ def test_build_manifest_persists_styleguide_metadata(tmp_path, monkeypatch):
             "sourcePath": str(source_path),
             "targetPath": str(target_path),
             "referencePath": None,
+            "sourceOrigin": "/tmp/original-source",
+            "sourceImportMode": "copy",
             "sourceDescription": "Python service",
             "targetDescription": "Rust service",
             "testCommand": "cargo test",
@@ -105,6 +107,8 @@ def test_build_manifest_persists_styleguide_metadata(tmp_path, monkeypatch):
 
     assert manifest["meta"]["sessionId"] == "migrate-20260416-a1b2c3"
     assert manifest["meta"]["frameworkVersion"] == "tier-2"
+    assert manifest["meta"]["sourceOrigin"] == "/tmp/original-source"
+    assert manifest["meta"]["sourceImportMode"] == "copy"
     assert manifest["meta"]["styleGuides"] == [{"source": "repo", "path": "styleguide/rust/style.md"}]
     assert manifest["meta"]["namingConventions"] == [
         {"source": "repo", "path": "styleguide/rust/sections/code-formatting-and-naming.md"}
@@ -120,3 +124,85 @@ def test_build_manifest_persists_styleguide_metadata(tmp_path, monkeypatch):
         "integration_review",
         "reiterate",
     ]
+
+
+def test_resolve_source_setup_copies_external_path_into_workspace(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    imports_root = repo_root / "experiments" / "imported-sources"
+    external_root = tmp_path / "outside"
+    external_source = external_root / "example-project"
+    external_source.mkdir(parents=True)
+    (external_source / "README.md").write_text("hello\n", encoding="utf-8")
+
+    monkeypatch.setattr(migrate_wizard, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(migrate_wizard, "IMPORTS_ROOT", imports_root)
+
+    setup = migrate_wizard.resolve_source_setup(str(external_source))
+
+    assert setup.import_mode == "copy"
+    assert setup.origin == str(external_source.resolve())
+    assert setup.source_path == (imports_root / "example-project" / "source").resolve()
+    assert setup.default_target_path == (imports_root / "example-project" / "migrated").resolve()
+    assert (setup.source_path / "README.md").read_text(encoding="utf-8") == "hello\n"
+
+
+def test_resolve_source_setup_clones_git_url_into_workspace(tmp_path, monkeypatch):
+    repo_root = tmp_path / "repo"
+    imports_root = repo_root / "experiments" / "imported-sources"
+
+    monkeypatch.setattr(migrate_wizard, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(migrate_wizard, "IMPORTS_ROOT", imports_root)
+
+    captured = {}
+
+    def _fake_clone(source_url, destination):
+        captured["source_url"] = source_url
+        captured["destination"] = destination
+        destination.mkdir(parents=True)
+        (destination / "Cargo.toml").write_text("[package]\nname = 'demo'\n", encoding="utf-8")
+
+    monkeypatch.setattr(migrate_wizard, "clone_source_repo", _fake_clone)
+
+    setup = migrate_wizard.resolve_source_setup("https://github.com/example/demo.git")
+
+    assert setup.import_mode == "git-clone"
+    assert setup.origin == "https://github.com/example/demo.git"
+    assert setup.source_path == (imports_root / "demo" / "source").resolve()
+    assert setup.default_target_path == (imports_root / "demo" / "migrated").resolve()
+    assert captured["source_url"] == "https://github.com/example/demo.git"
+    assert captured["destination"] == imports_root / "demo" / "source"
+
+
+def test_launch_orchestrator_detaches_stdin(tmp_path, monkeypatch):
+    manifest_path = tmp_path / "migration-manifest.json"
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir()
+
+    monkeypatch.setattr(
+        migrate_wizard.mf,
+        "load",
+        lambda _path: {"meta": {"artifactsDir": str(artifacts_dir)}},
+    )
+
+    captured = {}
+
+    class _Process:
+        pid = 12345
+
+    def _fake_popen(cmd, cwd, stdin, stdout, stderr, start_new_session):
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["stdin"] = stdin
+        captured["stderr"] = stderr
+        captured["start_new_session"] = start_new_session
+        return _Process()
+
+    monkeypatch.setattr(migrate_wizard.subprocess, "Popen", _fake_popen)
+
+    pid, log_path = migrate_wizard.launch_orchestrator(manifest_path, runtime="codex", model="gpt-5.4")
+
+    assert pid == 12345
+    assert log_path == artifacts_dir / "wizard-launch.log"
+    assert captured["stdin"] is migrate_wizard.subprocess.DEVNULL
+    assert captured["start_new_session"] is True
+    assert captured["cmd"][-5:] == ["--non-interactive", "--runtime", "codex", "--model", "gpt-5.4"]

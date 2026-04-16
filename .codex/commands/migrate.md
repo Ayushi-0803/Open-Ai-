@@ -59,7 +59,7 @@ Gather the following from the user. If they've already provided some in their me
 **Required:**
 1. **Source description** — What framework/language is the current code?
 2. **Target description** — What should it become?
-3. **Source path** — Directory containing the source code to migrate
+3. **Source path or git URL** — Directory or clone source for the code to migrate
 4. **Target path** — Where should the migrated code be written?
 5. **Recipe identifier or recipe path** — Which migration recipe should be used?
 
@@ -88,6 +88,11 @@ When intake is happening through `.codex/scripts/migrate_wizard.py`, offer:
 **venv / package managers:**
 The orchestrator scripts use only Python stdlib — no venv needed to run the framework itself.
 For `testCommand` and `buildCommand` on the target project, bake in any activation needed.
+
+If the source is outside the current workspace, prefer importing it into
+`experiments/imported-sources/` first. If the input is a git URL, clone it
+there. This keeps the migration run inside the repo workspace and avoids
+repeated permission prompts during monitoring.
 
 ## Step 2: Determine Tier
 

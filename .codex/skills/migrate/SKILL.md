@@ -68,7 +68,7 @@ Collect the following. If the user already provided them, extract them and do no
 Required:
 1. source description
 2. target description
-3. source path
+3. source path or git URL
 4. target path
 5. recipe identifier or recipe path
 
@@ -95,6 +95,11 @@ When collecting non-negotiables through the terminal wizard, present:
 - custom free-form style or naming rules
 
 The framework scripts use only Python stdlib. No venv is needed to run the framework itself. For `testCommand` and `buildCommand`, bake in activation if the target project needs it.
+
+If the provided source lives outside the current workspace, prefer importing it
+into `experiments/imported-sources/` before writing the manifest. If the input
+is a git URL, clone it there. This keeps the actual migration run on a local
+workspace copy and reduces repeated permission prompts.
 
 ## Step 2: Determine Tier
 
